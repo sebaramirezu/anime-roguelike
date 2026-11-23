@@ -1,13 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
-import { STAGE_WARNING } from './shared/gameConstants'
 import { Backpack } from './components/inventory/Backpack'
 import { ArsenalScreen, ShopScreen, StarterItemsScreen } from './screens/EquipmentScreens'
-import { buyOffer, refreshOffers, startEquipmentSession, type EquipmentSession } from './data/equipmentSession'
+import { CombatScreen, ResultScreen, StageMap, StageNotice } from './screens/ExpeditionScreens'
+import { advanceEquipment, buyOffer, refreshOffers, startEquipmentSession, type EquipmentSession } from './data/equipmentSession'
+import { stages, type Stage } from './data/levels'
+import type { CombatReport, CombatUpdate, GameEngineAdapter } from './adapters/gameEngineAdapter'
+import { liveCombat } from './adapters/liveCombat'
+import { editInventory, type InventoryCommand } from './data/expeditionInventory'
+import { loadExpedition, saveExpedition } from './data/expeditionSave'
+import { setInventoryCombatLock } from './engine'
 import type { CharacterId, Item } from './data/items'
 import './Equipment.css'
+import './Expedition.css'
 
-type Screen = 'menu' | 'characters' | 'starter' | 'preparation' | 'shop' | 'arsenal' | 'credits'
+type Screen = 'menu' | 'characters' | 'starter' | 'preparation' | 'shop' | 'arsenal' | 'credits' | 'map' | 'notice' | 'combat' | 'result'
 type Character = { id: CharacterId; name: string; anime: string; role: string; description: string; color: string; stats: { label: string; value: number }[] }
 
 const characters: Character[] = [
@@ -15,38 +22,132 @@ const characters: Character[] = [
   { id: 'naruto', name: 'Naruto', anime: 'Naruto', role: 'Ninja de chakra', description: 'Un ninja impredecible que domina clones, viento y una voluntad imposible de quebrar.', color: '#55b9ff', stats: [{ label: 'Fuerza', value: 84 }, { label: 'Chakra', value: 94 }, { label: 'Defensa', value: 80 }] },
 ]
 
-function App() {
+function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
+  const [saved] = useState(loadExpedition)
   const [screen, setScreen] = useState<Screen>('menu')
-  const [selectedCharacter, setSelectedCharacter] = useState<CharacterId>('goku')
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterId>(saved?.session.character ?? 'goku')
   const [arsenalCharacter, setArsenalCharacter] = useState<CharacterId>('goku')
-  const [session, setSession] = useState<EquipmentSession | null>(null)
+  const [session, setSession] = useState<EquipmentSession | null>(saved?.session ?? null)
+  const [stageIndex, setStageIndex] = useState(saved?.stageIndex ?? 0)
+  const [storageError, setStorageError] = useState(false)
+  const [combat, setCombat] = useState<CombatUpdate | null>(null)
+  const [combatError, setCombatError] = useState<string | null>(null)
+  const activeCombat = useRef<AbortController | null>(null)
   const character = characters.find(({ id }) => id === selectedCharacter) ?? characters[0]
   const activeCharacter = characters.find(({ id }) => id === session?.character) ?? character
+  const currentStage = stages[stageIndex]
+  const stage = currentStage
+
+  useEffect(() => () => activeCombat.current?.abort(), [])
+  useEffect(() => {
+    const saved = saveExpedition(session, stageIndex)
+    let active = true
+    queueMicrotask(() => { if (active) setStorageError(!saved) })
+    return () => { active = false }
+  }, [session, stageIndex])
+
+  function lockInventory(locked: boolean) {
+    setSession((current) => current && ({
+      ...current, inventory: { ...current.inventory, bag: setInventoryCombatLock(current.inventory.bag, locked) },
+    }))
+  }
 
   function confirmEquipment(selection: readonly Item[]) {
     const next = startEquipmentSession(selectedCharacter, selection)
     if (!next) return
     setSession(next)
+    setStageIndex(0)
     setScreen('preparation')
   }
 
+  function beginCombat() {
+    if (!session || activeCombat.current) return
+    setCombat(null)
+    setCombatError(null)
+    setScreen('combat')
+    const controller = new AbortController()
+    activeCombat.current = controller
+    const lockedInventory = setInventoryCombatLock(session.inventory.bag, true)
+    lockInventory(true)
+    function fail() {
+      if (controller.signal.aborted) return
+      controller.abort()
+      activeCombat.current = null
+      lockInventory(false)
+      setCombatError('El motor no pudo iniciar o completar el combate. Vuelve a preparación para reintentar.')
+    }
+    try {
+      const task = engine.startCombat({ character: session.character, stage, inventory: lockedInventory }, (update) => {
+        if (controller.signal.aborted) return
+        setCombat(update)
+        if (update.status === 'finished') {
+          controller.abort()
+          activeCombat.current = null
+          lockInventory(false)
+          setScreen('result')
+        }
+      }, controller.signal)
+      void Promise.resolve(task).catch(fail)
+    } catch {
+      fail()
+    }
+  }
+
+  function continueExpedition(report: CombatReport | null) {
+    if (!report || report.outcome === 'timeout') {
+      setScreen('preparation')
+      return
+    }
+    const nextStage = stages[stageIndex + 1]
+    if (report.outcome === 'defeat' || !nextStage) {
+      setSession(null)
+      setScreen(report.outcome === 'defeat' ? 'characters' : 'menu')
+      return
+    }
+    setSession((current) => current && advanceEquipment(current, report.gold, nextStage.level !== currentStage.level))
+    setStageIndex(stageIndex + 1)
+    setScreen('preparation')
+  }
+
+  function inventoryCommand(command: InventoryCommand): string | undefined {
+    if (!session || screen !== 'preparation' || activeCombat.current) return 'La mochila está bloqueada.'
+    const result = editInventory(session.inventory, command)
+    if (!result.ok) return result.error
+    setSession({ ...session, inventory: result.inventory })
+  }
+
+  const combatView = screen === 'combat' || screen === 'result' || screen === 'notice'
+  const report = combat?.status === 'finished' ? combat.report : null
+
   return <main className="game-shell">
     <header className="topbar">
-      <button className="brand" onClick={() => setScreen('menu')} aria-label="Volver al menú principal">
+      <button className="brand" disabled={combatView} onClick={() => setScreen('menu')} aria-label="Volver al menú principal">
         <span className="brand-mark">AR</span><span>ANIME <strong>ROGUELIKE</strong></span>
       </button>
-      <div className="top-status"><span className="status-dot" /> EXPEDICIÓN 01
+      <div className="top-status"><span className="status-dot" /> NIVEL {stage.level} · ETAPA {stage.number}
         {session && <><span className="gold" aria-hidden="true">◆</span> {session.gold} de oro</>}
       </div>
     </header>
+    {storageError && <p className="stage-notice screen-padding" role="status">El navegador no permite guardar la expedición.</p>}
     {screen === 'menu' && <Menu onNavigate={setScreen} canResume={session !== null} />}
     {screen === 'characters' && <CharacterSelect selected={selectedCharacter} onSelect={setSelectedCharacter} onContinue={() => setScreen('starter')} onBack={() => setScreen('menu')} />}
     {screen === 'starter' && <StarterItemsScreen character={character.id} name={character.name} onBack={() => setScreen('characters')} onConfirm={confirmEquipment} />}
-    {screen === 'preparation' && session && <Preparation character={activeCharacter} session={session}
-      onBack={() => setScreen('menu')} onCredits={() => setScreen('credits')} onShop={() => setScreen('shop')} />}
+    {screen === 'preparation' && session && <Preparation character={activeCharacter} session={session} stage={stage}
+      onInventoryCommand={inventoryCommand}
+      onBack={() => setScreen('menu')} onCredits={() => setScreen('credits')} onShop={() => setScreen('shop')}
+      onMap={() => setScreen('map')} onNotice={() => setScreen('notice')} />}
     {screen === 'shop' && session && <ShopScreen session={session} onBack={() => setScreen('preparation')}
-      onBuy={(id) => setSession((current) => current && buyOffer(current, id))}
+      onBuy={(id) => {
+        setSession((current) => current && buyOffer(current, id))
+      }}
       onRefresh={() => setSession((current) => current && refreshOffers(current))} />}
+    {screen === 'map' && <StageMap current={currentStage} demo={false} onBack={() => setScreen('preparation')} onPreview={() => {}} />}
+    {screen === 'notice' && <StageNotice stage={stage} demo={false} onStart={beginCombat} onBack={() => setScreen('preparation')} />}
+    {screen === 'combat' && <CombatScreen stage={stage}
+      hero={{ name: activeCharacter.name, mark: activeCharacter.id === 'goku' ? '悟' : '忍', color: activeCharacter.color }}
+      update={combat} demo={false} error={combatError}
+      onBack={() => setScreen('preparation')} onDemoReport={() => setScreen('result')} />}
+    {screen === 'result' && <ResultScreen stage={stage} report={report} onContinue={() => continueExpedition(report)} onMap={() => setScreen('map')} />}
     {screen === 'arsenal' && <ArsenalScreen character={arsenalCharacter} onSelect={setArsenalCharacter} onBack={() => setScreen('menu')} />}
     {screen === 'credits' && <Credits onBack={() => setScreen('menu')} />}
   </main>
@@ -75,19 +176,23 @@ function Menu({ onNavigate, canResume }: { onNavigate: (screen: Screen) => void;
 
 function CharacterSelect({ selected, onSelect, onContinue, onBack }: { selected: CharacterId; onSelect: (id: CharacterId) => void; onContinue: () => void; onBack: () => void }) { return <section className="screen-padding inner-screen"><div className="section-heading"><button className="back-button" onClick={onBack}>← MENÚ</button><p className="eyebrow">PASO 01 / 03</p><h2>ELIGE TU <span>CAMPEÓN</span></h2><p>Dos caminos. Una expedición. Elige quién luchará por ti.</p></div><div className="character-grid">{characters.map((item) => <button key={item.id} className={`character-card ${selected === item.id ? 'selected' : ''}`} onClick={() => onSelect(item.id)} style={{ '--character-color': item.color } as React.CSSProperties}><div className="portrait">{item.id === 'goku' ? '悟' : '忍'}</div><div className="character-info"><p className="eyebrow">{item.anime}</p><h3>{item.name}</h3><strong>{item.role}</strong><p>{item.description}</p>{item.stats.map((stat) => <div className="stat" key={stat.label}><span>{stat.label}</span><div><i style={{ width: `${stat.value}%` }} /></div><b>{stat.value}</b></div>)}</div><span className="select-indicator">{selected === item.id ? '✓ SELECCIONADO' : 'SELECCIONAR'}</span></button>)}</div><div className="bottom-action"><span>Tu elección define el arsenal inicial.</span><button className="primary-button" onClick={onContinue}>CONTINUAR →</button></div></section> }
 
-function Preparation({ character, session, onBack, onCredits, onShop }: {
+function Preparation({ character, session, stage, onInventoryCommand, onBack, onCredits, onShop, onMap, onNotice }: {
   character: Character
   session: EquipmentSession
+  stage: Stage
+  onInventoryCommand: (command: InventoryCommand) => string | undefined
   onBack: () => void
   onCredits: () => void
   onShop: () => void
+  onMap: () => void
+  onNotice: () => void
 }) {
   return <section className="screen-padding inner-screen">
     <div className="section-heading">
       <button className="back-button" onClick={onBack}>← MENÚ</button>
-      <p className="eyebrow">PREPARACIÓN · NIVEL 01</p>
+      <p className="eyebrow">PREPARACIÓN · NIVEL {stage.level}</p>
       <h2>PREPARA TU <span>EXPEDICIÓN</span></h2>
-      <p>Revisa tu equipo antes de la primera etapa.</p>
+      <p>{stage.region} · Etapa {stage.number} / {stage.total} · {stage.enemy.name}</p>
     </div>
     <div className="prep-layout">
       <div className="loadout-panel panel">
@@ -100,14 +205,14 @@ function Preparation({ character, session, onBack, onCredits, onShop }: {
           <div><span>Oro</span><strong>{session.gold} ◆</strong></div>
         </div>
         <button className="secondary-button" onClick={onShop}>ABRIR TIENDA</button>
+        <button className="secondary-button" onClick={onMap}>MAPA DE EXPEDICIÓN</button>
         <button className="secondary-button" onClick={onCredits}>VER CRÉDITOS</button>
       </div>
-      <Backpack entries={session.tray} />
+      <Backpack inventory={session.inventory} onCommand={onInventoryCommand} />
     </div>
-    <div className="stage-notice"><span aria-hidden="true">⚠</span><p><strong>AVISO DE ETAPA</strong>{STAGE_WARNING}</p></div>
     <div className="bottom-action">
-      <span>Nivel 01 <b>›</b> Etapa 01 / 12</span>
-      <button className="primary-button" onClick={() => window.alert(STAGE_WARNING)}>VER AVISO DE ETAPA →</button>
+      <span>Nivel {stage.level} <b>›</b> Etapa {stage.number} / {stage.total}</span>
+      <button className="primary-button" onClick={onNotice}>CONTINUAR A ETAPA →</button>
     </div>
   </section>
 }

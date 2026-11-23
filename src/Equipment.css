@@ -78,10 +78,14 @@
 .shape-grid span { width: 8px; height: 8px; background: currentColor; }
 .inventory-cell { padding: 0; min-width: 0; }
 .inventory-cell:enabled:hover { border-color: var(--gold); }
-.inventory-cell.shape-preview { background: #6343a1; border-color: #c2a1ff; }
 .inventory-cell.locked { background: #100e24; border-color: #17142e; }
-.inventory-cell.locked.shape-preview { border-color: #8d70b0; }
 .inventory-cell:disabled { opacity: 1; cursor: default; }
+.inventory-cell.preview-valid { background: #234d47; border-color: #75dfae; color: #c2fbe5; }
+.inventory-cell.preview-invalid { background: #53283c; border-color: #ff829c; color: #ffd2dd; }
+.touch-placement { display: none; }
+@media (any-pointer: coarse) {
+  .touch-placement { display: block; }
+}
 
 .equipment-tray { margin-top: 18px; }
 .equipment-tray h3 span { margin-inline-start: 8px; }

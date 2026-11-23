@@ -1,70 +1,121 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Cell, Item } from '../../data/items'
-import type { TrayEntry } from '../../data/equipmentSession'
+import { fusionOptions, inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand, type UnplacedEntry } from '../../data/expeditionInventory'
+import { rotateShape, type Rotation } from '../../engine'
 
-const backpackMasks = {
-  32: ['.####.', '######', '######', '######', '######', '.####.'],
-  42: Array<string>(6).fill('#######'),
-  49: Array<string>(7).fill('#######'),
-}
-
-export function ItemShape({ item }: { item: Item }) {
-  const width = Math.max(...item.shape.map(([column]) => column)) + 1
-  const height = Math.max(...item.shape.map(([, row]) => row)) + 1
+export function ItemShape({ item, rotation = 0 }: { item: Item; rotation?: Rotation }) {
+  const shape = rotateShape(item.shape, rotation)
+  const width = Math.max(...shape.map(([column]) => column)) + 1
+  const height = Math.max(...shape.map(([, row]) => row)) + 1
   return <div className="equipment-shape">
     <div className="shape-grid" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, gridTemplateRows: `repeat(${height}, 1fr)` }}>
-      {item.shape.map(([column, row]) => <span key={`${column}-${row}`} style={{ gridColumn: column + 1, gridRow: row + 1 }} />)}
+      {shape.map(([column, row]) => <span key={`${column}-${row}`} style={{ gridColumn: column + 1, gridRow: row + 1 }} />)}
     </div>
     <small>{item.shape.length} {item.shape.length === 1 ? 'casilla' : 'casillas'}</small>
   </div>
 }
 
 export function Tray({ entries, selected, onSelect }: {
-  entries: readonly TrayEntry[]
+  entries: readonly UnplacedEntry[]
   selected?: string
   onSelect?: (id: string) => void
 }) {
   return <section className="panel equipment-tray">
     <h3>Bandeja temporal <span>{entries.length}</span></h3>
     {entries.length === 0 && <p>La bandeja está vacía.</p>}
-    <ul>{entries.map(({ id, item }) => <li key={id}>
+    <ul>{entries.map(({ id, item, rotation }) => <li key={id}>
       {onSelect
         ? <button type="button" aria-pressed={id === selected} onClick={() => onSelect(id)}>
-            <span><b aria-hidden="true">{item.icon}</b> {item.name}</span><ItemShape item={item} />
+            <span><b aria-hidden="true">{item.icon}</b> {item.name}</span><ItemShape item={item} rotation={rotation} />
           </button>
         : <div className="tray-entry">
-            <span><b aria-hidden="true">{item.icon}</b> {item.name}</span><ItemShape item={item} />
+            <span><b aria-hidden="true">{item.icon}</b> {item.name}</span><ItemShape item={item} rotation={rotation} />
           </div>}
     </li>)}</ul>
   </section>
 }
 
-export function Backpack({ entries, capacity = 32 }: {
-  entries: readonly TrayEntry[]
-  capacity?: keyof typeof backpackMasks
+export function Backpack({ inventory, onCommand }: {
+  inventory: ExpeditionInventory
+  onCommand: (command: InventoryCommand) => string | undefined
 }) {
   const [selected, setSelected] = useState<string>()
   const [anchor, setAnchor] = useState<Cell>([1, 1])
-  const item = entries.find(({ id }) => id === selected)?.item
-  const mask = backpackMasks[capacity]
-  const preview = new Set(item?.shape.map(([column, row]) => `${column + anchor[0]}-${row + anchor[1]}`))
+  const [message, setMessage] = useState<{ error: boolean; text: string }>()
+  const touchAnchor = useRef<Cell | null>(null)
+  const touchInput = useRef(false)
+  const { tray, placed, capacity, mask } = inventoryView(inventory)
+  const selectedPlacement = placed.find(({ entry }) => entry.id === selected)
+  const entry = selectedPlacement?.entry ?? tray.find(({ id }) => id === selected)
+  const preview = entry && previewPlacement(inventory, entry.id, anchor)
+  const partners = entry ? fusionOptions(inventory, entry.id) : []
+  const locked = inventory.bag.combatActive
+
+  function select(id?: string, position: Cell = [1, 1]) {
+    touchAnchor.current = null
+    setSelected(id)
+    setAnchor(position)
+    setMessage(undefined)
+  }
+
+  function send(command: InventoryCommand, success: string, clearSelection = false) {
+    const error = onCommand(command)
+    if (!error && clearSelection) setSelected(undefined)
+    setMessage({ error: error !== undefined, text: error ?? success })
+  }
 
   return <div className="inventory-panel panel">
     <div className="panel-title"><span>MOCHILA ESPACIAL</span><b>{capacity} CASILLAS HABILITADAS</b></div>
     <div className="inventory-grid" style={{ gridTemplateColumns: `repeat(${mask[0].length}, minmax(0, 1fr))` }}>
-      {mask.flatMap((line, row) => [...line].map((cell, column) => {
-        const key = `${column}-${row}`
-        const blocked = cell === '.'
-        return <button key={key} type="button"
-          className={`inventory-cell${blocked ? ' locked' : ''}${preview.has(key) ? ' shape-preview' : ''}`}
-          disabled={blocked || !item}
-          aria-label={`Fila ${row + 1}, columna ${column + 1}${blocked ? ', bloqueada' : ''}${preview.has(key) ? ', vista previa' : ''}`}
-          onClick={() => setAnchor([column, row])}
-        />
+      {mask.flatMap((line, row) => line.map((open, column) => {
+        const cell = [column, row] as const
+        const occupant = placed.find(({ cells }) => cells.some(([x, y]) => x === column && y === row))
+        const projected = preview?.cells.some(([x, y]) => x === column && y === row)
+        const previewClass = projected ? preview?.valid ? ' preview-valid' : ' preview-invalid' : ''
+        return <button key={`${column}-${row}`} type="button"
+          className={`inventory-cell${open ? '' : ' locked'}${occupant ? ' occupied' : ''}${previewClass}`}
+          disabled={locked || (!entry && !occupant)}
+          aria-label={`Fila ${row + 1}, columna ${column + 1}${occupant ? `, ${occupant.entry.item.name}` : ''}${open ? '' : ', bloqueada'}`}
+          onFocus={() => { if (entry) setAnchor(cell) }}
+          onPointerDown={(event) => { touchInput.current = event.pointerType !== 'mouse' }}
+          onPointerEnter={(event) => { if (entry && event.pointerType === 'mouse') setAnchor(cell) }}
+          onClick={(event) => {
+            if (entry) {
+              setAnchor(cell)
+              if (event.detail && touchInput.current && (touchAnchor.current?.[0] !== column || touchAnchor.current?.[1] !== row)) {
+                touchAnchor.current = cell
+                setMessage(undefined)
+                return
+              }
+              send({ kind: selectedPlacement ? 'move' : 'place', instanceId: entry.id, anchor: cell }, 'Posición guardada.', true)
+              touchAnchor.current = null
+            } else if (occupant) {
+              select(occupant.entry.id, occupant.anchor)
+            }
+          }}
+        >{occupant?.entry.item.icon ?? (projected ? entry?.item.icon : undefined)}</button>
       }))}
     </div>
-    <p className="equipment-note">El motor de inventario está pendiente de conexión. Selecciona un objeto y pulsa una casilla para ver su forma. La vista previa no valida ni guarda posiciones.</p>
-    {item && <p className="equipment-note" role="status">Vista previa de {item.name} · fila {anchor[1] + 1}, columna {anchor[0] + 1}</p>}
-    <Tray entries={entries} selected={selected} onSelect={setSelected} />
+    <p className="equipment-note">Selecciona un objeto y pulsa una casilla para colocarlo. Pulsa una pieza colocada para moverla o rotarla.</p>
+    {entry && <p className="touch-placement equipment-note">En pantalla táctil, pulsa una vez para ver la posición y otra para confirmarla.</p>}
+    {entry && <p className="equipment-note" role="status">
+      {entry.item.name} · {entry.rotation}° · Fila {anchor[1] + 1}, columna {anchor[0] + 1} · {preview?.valid ? 'Posición válida' : 'Posición inválida'}
+    </p>}
+    {entry && <div className="equipment-summary">
+      <button className="secondary-button" disabled={locked} onClick={() =>
+        send({ kind: 'rotate', instanceId: entry.id }, 'Rotación guardada.')
+      }>ROTAR 90°</button>
+      <button className="secondary-button" onClick={() => select()}>CANCELAR SELECCIÓN</button>
+    </div>}
+    {message && <p role={message.error ? 'alert' : 'status'}>{message.text}</p>}
+    <Tray entries={tray} selected={selected} onSelect={locked ? undefined : select} />
+    <h3>Fusiones disponibles</h3>
+    {entry && partners.length ? <ul>{partners.map(({ secondId, name, result }) => <li key={secondId}>
+      <p>{entry.item.name} + {name} → {result.name} · Nivel {result.level}</p>
+      <ItemShape item={result} />
+      <button className="secondary-button" disabled={locked} onClick={() =>
+        send({ kind: 'fuse', firstId: entry.id, secondId }, `Fusión completada: ${result.name}.`, true)
+      }>FUSIONAR</button>
+    </li>)}</ul> : <p>Selecciona una pieza colocada con una pareja compatible.</p>}
   </div>
 }

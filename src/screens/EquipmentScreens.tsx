@@ -99,7 +99,7 @@ export function ShopScreen({ session, onBack, onBuy, onRefresh }: {
         </button>
       </ItemCard>
     )}</div>
-    <Tray entries={session.tray} />
+    <Tray entries={session.inventory.tray} />
   </section>
 }
 

@@ -1,4 +1,6 @@
 import { catalogFor, type CharacterId, type Item } from './items.ts'
+import { createInventory } from '../engine'
+import { expandInventory, type ExpeditionInventory } from './expeditionInventory'
 
 export const equipmentConfig = {
   starterCount: 2,
@@ -26,17 +28,16 @@ export function validStarterSelection(character: CharacterId, selection: readonl
     && selectedSupply(selection) <= equipmentConfig.supplyBudget
 }
 
-export type TrayEntry = { id: string; item: Item }
 export type Offer = { id: string; item: Item; price: number; sold: boolean }
 export type EquipmentSession = {
   character: CharacterId
   gold: number
   round: number
   offers: Offer[]
-  tray: TrayEntry[]
+  inventory: ExpeditionInventory
 }
 
-function offersFor(character: CharacterId, round: number): Offer[] {
+export function offersFor(character: CharacterId, round: number): Offer[] {
   const pool = catalogFor(character)
     .filter((item) => item.level < 6)
     .flatMap((item) => item.price === null ? [] : [{ item, price: item.price }])
@@ -56,24 +57,34 @@ export function startEquipmentSession(character: CharacterId, selection: readonl
     gold: equipmentConfig.provisionalGold,
     round: 0,
     offers: offersFor(character, 0),
-    tray: selection.map((item) => ({ id: `starter-${item.id}`, item })),
+    inventory: { bag: createInventory(), tray: selection.map((item) => ({ id: `starter-${item.id}`, item, rotation: 0 })) },
   }
 }
 
 export function buyOffer(session: EquipmentSession, id: string): EquipmentSession {
   const offer = session.offers.find((entry) => entry.id === id)
-  if (!offer || offer.sold || offer.item.level === 6 || session.gold < offer.price) return session
+  if (session.inventory.bag.combatActive || !offer || offer.sold || offer.item.level === 6 || session.gold < offer.price) return session
   return {
     ...session,
     gold: session.gold - offer.price,
     offers: session.offers.map((entry) => entry.id === id ? { ...entry, sold: true } : entry),
-    tray: [...session.tray, { id, item: offer.item }],
+    inventory: { ...session.inventory, tray: [...session.inventory.tray, { id: `purchase-${id}`, item: offer.item, rotation: 0 }] },
   }
 }
 
 export function refreshOffers(session: EquipmentSession): EquipmentSession {
   const { refreshPrice } = equipmentConfig
-  if (session.gold < refreshPrice) return session
+  if (session.inventory.bag.combatActive || session.gold < refreshPrice) return session
   const round = session.round + 1
   return { ...session, round, gold: session.gold - refreshPrice, offers: offersFor(session.character, round) }
+}
+
+export function advanceEquipment(session: EquipmentSession, goldEarned: number | undefined, nextLevel: boolean): EquipmentSession {
+  if (!nextLevel) return { ...session, gold: session.gold + (goldEarned ?? 0) }
+
+  const round = session.round + 1
+  return {
+    ...session, gold: 0, round, offers: offersFor(session.character, round),
+    inventory: expandInventory(session.inventory, session.inventory.bag.completedLevels + 1),
+  }
 }
