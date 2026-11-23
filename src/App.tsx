@@ -7,7 +7,7 @@ import { advanceEquipment, buyOffer, refreshOffers, startEquipmentSession, type 
 import { stages, type Stage } from './data/levels'
 import type { CombatReport, CombatUpdate, GameEngineAdapter } from './adapters/gameEngineAdapter'
 import { liveCombat } from './adapters/liveCombat'
-import { editInventory, type InventoryCommand } from './data/expeditionInventory'
+import { editInventory, type InventoryCommand, type InventoryResponse } from './data/expeditionInventory'
 import { loadExpedition, saveExpedition } from './data/expeditionSave'
 import { setInventoryCombatLock } from './engine'
 import type { CharacterId, Item } from './data/items'
@@ -109,11 +109,11 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
     setScreen('preparation')
   }
 
-  function inventoryCommand(command: InventoryCommand): string | undefined {
-    if (!session || screen !== 'preparation' || activeCombat.current) return 'La mochila está bloqueada.'
+  function inventoryCommand(command: InventoryCommand): InventoryResponse {
+    if (!session || screen !== 'preparation' || activeCombat.current) return { ok: false, error: 'La mochila está bloqueada.' }
     const result = editInventory(session.inventory, command)
-    if (!result.ok) return result.error
-    setSession({ ...session, inventory: result.inventory })
+    if (result.ok) setSession({ ...session, inventory: result.inventory })
+    return result
   }
 
   const combatView = screen === 'combat' || screen === 'result' || screen === 'notice'
@@ -180,7 +180,7 @@ function Preparation({ character, session, stage, onInventoryCommand, onBack, on
   character: Character
   session: EquipmentSession
   stage: Stage
-  onInventoryCommand: (command: InventoryCommand) => string | undefined
+  onInventoryCommand: (command: InventoryCommand) => InventoryResponse
   onBack: () => void
   onCredits: () => void
   onShop: () => void

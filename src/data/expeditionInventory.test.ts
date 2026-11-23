@@ -3,7 +3,7 @@ import { liveCombat } from '../adapters/liveCombat'
 import type { CombatUpdate } from '../adapters/gameEngineAdapter'
 import { createInventory, setInventoryCombatLock } from '../engine'
 import { advanceEquipment, buyOffer, startEquipmentSession, type EquipmentSession } from './equipmentSession'
-import { editInventory, fusionOptions, inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand } from './expeditionInventory'
+import { editInventory, inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand } from './expeditionInventory'
 import { expeditionSaveKey, loadExpedition, restoreExpedition, saveExpedition, serializeExpedition } from './expeditionSave'
 import { items, type Cell } from './items'
 import { stages } from './levels'
@@ -158,14 +158,14 @@ describe('expedition backpack regression', () => {
   })
 
   it('uses the real engine fusion to replace exactly two instances and restores the result', () => {
-    const inventory = place(place(setup('rasenshuriken', 'kurama-rasenshuriken', 'kunai'), 'rasenshuriken-instance', [1, 1]),
-      'kurama-rasenshuriken-instance', [3, 1])
-    const [option] = fusionOptions(inventory, 'rasenshuriken-instance')
-    expect(option.result.id).toBe('baryon-mode')
-    const fused = apply(inventory, { kind: 'fuse', firstId: 'rasenshuriken-instance', secondId: option.secondId })
+    const inventory = place(setup('rasenshuriken', 'kurama-rasenshuriken', 'kunai'), 'rasenshuriken-instance', [1, 1])
+    const result = editInventory(inventory, { kind: 'place', instanceId: 'kurama-rasenshuriken-instance', anchor: [3, 1] })
+    if (!result.ok) throw new Error(result.error)
+    expect(result.fusion?.item.id).toBe('baryon-mode')
+    const fused = result.inventory
     expect(fused.bag.items.map(({ itemId }) => itemId)).toEqual(['baryon-mode'])
     expect(fused.tray.map(({ item }) => item.id)).toEqual(['kunai'])
-    expect(fusionOptions(fused, 'rasenshuriken-instance')).toEqual([])
+    expect(editInventory(fused, { kind: 'rotate', instanceId: 'rasenshuriken-instance' }).ok).toBe(false)
     expect(restoreExpedition(serializeExpedition({ session: { ...session(), inventory: fused }, stageIndex: 0 }))?.session.inventory).toEqual(fused)
   })
 
@@ -178,7 +178,6 @@ describe('expedition backpack regression', () => {
       { kind: 'move', instanceId: 'starter-kunai', anchor: [3, 3] },
       { kind: 'rotate', instanceId: 'starter-kunai' },
       { kind: 'place', instanceId: 'starter-basic-shield', anchor: [4, 4] },
-      { kind: 'fuse', firstId: 'starter-kunai', secondId: 'starter-basic-shield' },
     ]
     for (const command of commands) expect(editInventory(locked, command)).toEqual({
       ok: false, error: 'La mochila está bloqueada durante el combate.',

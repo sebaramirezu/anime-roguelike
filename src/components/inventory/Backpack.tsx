@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import type { Cell, Item } from '../../data/items'
-import { fusionOptions, inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand, type UnplacedEntry } from '../../data/expeditionInventory'
+import { inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand, type InventoryResponse, type UnplacedEntry } from '../../data/expeditionInventory'
 import { rotateShape, type Rotation } from '../../engine'
+import { FusionGuide } from './FusionGuide'
 
 export function ItemShape({ item, rotation = 0 }: { item: Item; rotation?: Rotation }) {
   const shape = rotateShape(item.shape, rotation)
@@ -37,7 +38,7 @@ export function Tray({ entries, selected, onSelect }: {
 
 export function Backpack({ inventory, onCommand }: {
   inventory: ExpeditionInventory
-  onCommand: (command: InventoryCommand) => string | undefined
+  onCommand: (command: InventoryCommand) => InventoryResponse
 }) {
   const [selected, setSelected] = useState<string>()
   const [anchor, setAnchor] = useState<Cell>([1, 1])
@@ -48,7 +49,6 @@ export function Backpack({ inventory, onCommand }: {
   const selectedPlacement = placed.find(({ entry }) => entry.id === selected)
   const entry = selectedPlacement?.entry ?? tray.find(({ id }) => id === selected)
   const preview = entry && previewPlacement(inventory, entry.id, anchor)
-  const partners = entry ? fusionOptions(inventory, entry.id) : []
   const locked = inventory.bag.combatActive
 
   function select(id?: string, position: Cell = [1, 1]) {
@@ -59,9 +59,16 @@ export function Backpack({ inventory, onCommand }: {
   }
 
   function send(command: InventoryCommand, success: string, clearSelection = false) {
-    const error = onCommand(command)
-    if (!error && clearSelection) setSelected(undefined)
-    setMessage({ error: error !== undefined, text: error ?? success })
+    const result = onCommand(command)
+    if (!result.ok) {
+      setMessage({ error: true, text: result.error })
+      return
+    }
+    if (clearSelection || result.fusion) setSelected(undefined)
+    const fusion = result.fusion
+    setMessage({ error: false, text: fusion
+      ? `Fusión completada: ${fusion.item.name} ${fusion.placed ? 'en la mochila' : 'en la bandeja (sin espacio en la mochila)'}.`
+      : success })
   }
 
   return <div className="inventory-panel panel">
@@ -71,7 +78,8 @@ export function Backpack({ inventory, onCommand }: {
         const cell = [column, row] as const
         const occupant = placed.find(({ cells }) => cells.some(([x, y]) => x === column && y === row))
         const projected = preview?.cells.some(([x, y]) => x === column && y === row)
-        const previewClass = projected ? preview?.valid ? ' preview-valid' : ' preview-invalid' : ''
+        const previewClass = projected ? preview?.fusion ? ' preview-fusion'
+          : preview?.valid ? ' preview-valid' : ' preview-invalid' : ''
         return <button key={`${column}-${row}`} type="button"
           className={`inventory-cell${open ? '' : ' locked'}${occupant ? ' occupied' : ''}${previewClass}`}
           disabled={locked || (!entry && !occupant)}
@@ -101,7 +109,9 @@ export function Backpack({ inventory, onCommand }: {
     {entry && <p className="equipment-note" role="status">
       {entry.item.name} · {entry.rotation}° · Fila {anchor[1] + 1}, columna {anchor[0] + 1} · {preview?.valid ? 'Posición válida' : 'Posición inválida'}
     </p>}
+    {preview?.fusion && <p className="fusion-availability" role="status">Al confirmar: fusión en {preview.fusion.name}.</p>}
     {entry && <div className="equipment-summary">
+      <ItemShape item={entry.item} rotation={entry.rotation} />
       <button className="secondary-button" disabled={locked} onClick={() =>
         send({ kind: 'rotate', instanceId: entry.id }, 'Rotación guardada.')
       }>ROTAR 90°</button>
@@ -109,13 +119,6 @@ export function Backpack({ inventory, onCommand }: {
     </div>}
     {message && <p role={message.error ? 'alert' : 'status'}>{message.text}</p>}
     <Tray entries={tray} selected={selected} onSelect={locked ? undefined : select} />
-    <h3>Fusiones disponibles</h3>
-    {entry && partners.length ? <ul>{partners.map(({ secondId, name, result }) => <li key={secondId}>
-      <p>{entry.item.name} + {name} → {result.name} · Nivel {result.level}</p>
-      <ItemShape item={result} />
-      <button className="secondary-button" disabled={locked} onClick={() =>
-        send({ kind: 'fuse', firstId: entry.id, secondId }, `Fusión completada: ${result.name}.`, true)
-      }>FUSIONAR</button>
-    </li>)}</ul> : <p>Selecciona una pieza colocada con una pareja compatible.</p>}
+    <FusionGuide placed={placed} tray={tray} />
   </div>
 }

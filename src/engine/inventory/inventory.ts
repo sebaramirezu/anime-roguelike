@@ -56,6 +56,19 @@ function occupiedCells(item: SpatialItemDefinition, anchor: Cell, rotation: Rota
   return rotateShape(item.shape, rotation).map(([x, y]) => [anchor[0] + x, anchor[1] + y])
 }
 
+export function getOccupiedCells(instance: ItemInstance): readonly Cell[] {
+  return occupiedCells({ id: instance.itemId, shape: instance.shape }, instance.anchor, instance.rotation)
+}
+
+export function findSharedEdge(first: readonly Cell[], second: readonly Cell[]): readonly [Cell, Cell] | undefined {
+  if (first.some(([x, y]) => second.some(([otherX, otherY]) => x === otherX && y === otherY))) return undefined
+  for (const cell of first) {
+    const [x, y] = cell
+    const neighbor = second.find(([otherX, otherY]) => Math.abs(x - otherX) + Math.abs(y - otherY) === 1)
+    if (neighbor) return [cell, neighbor]
+  }
+}
+
 function isCellOpen(state: InventoryState, [x, y]: Cell): boolean {
   const row = getInventoryMask(state.completedLevels)[y]
   return row?.[x] === true
@@ -146,22 +159,12 @@ export function getItemAdjacencies(state: InventoryState): readonly ItemAdjacenc
   for (let i = 0; i < state.items.length; i += 1) {
     const first = state.items[i]
     if (!first) continue
-    const firstShape = definitionFor(state, first.instanceId)
-    if (!firstShape) continue
-    const firstCells = occupiedCells(firstShape, first.anchor, first.rotation)
+    const firstCells = getOccupiedCells(first)
     for (let j = i + 1; j < state.items.length; j += 1) {
       const second = state.items[j]
       if (!second) continue
-      const secondShape = definitionFor(state, second.instanceId)
-      if (!secondShape) continue
-      const secondCells = occupiedCells(secondShape, second.anchor, second.rotation)
-      for (const [x, y] of firstCells) {
-        const neighbor = secondCells.find(([otherX, otherY]) => Math.abs(x - otherX) + Math.abs(y - otherY) === 1)
-        if (neighbor) {
-          result.push({ firstInstanceId: first.instanceId, secondInstanceId: second.instanceId, touchingCells: [[x, y], neighbor] })
-          break
-        }
-      }
+      const touchingCells = findSharedEdge(firstCells, getOccupiedCells(second))
+      if (touchingCells) result.push({ firstInstanceId: first.instanceId, secondInstanceId: second.instanceId, touchingCells })
     }
   }
   return result

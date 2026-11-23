@@ -18,6 +18,8 @@ export {
   canPlaceItem,
   createInventory,
   getItemAdjacencies,
+  getOccupiedCells,
+  findSharedEdge,
   moveItem,
   placeItem,
   removeItem,
@@ -42,7 +44,7 @@ export { advanceEffects, applyEffects } from './effects/effects'
 export type { ActiveEffect, EffectTarget, GameEffect } from './effects/types'
 export { calculateSynergies } from './effects/synergies'
 export type { SynergyBonus, SynergyItem, SynergyRule } from './effects/synergies'
-export { canFuse, fuseItems } from './fusion/fusion'
+export { canFuse, fuseItems, findFusionResult, resolveFusion } from './fusion/fusion'
 export type { FusionItemDefinition, FusionRecipe, FusionRequest } from './fusion/fusion'
 export {
   STAGE_START_NOTICE,

@@ -1,5 +1,5 @@
 import {
-  canFuse, canPlaceItem, fuseItems, getInventoryCapacity, getInventoryMask, moveItem,
+  canPlaceItem, findFusionResult, findSharedEdge, getInventoryCapacity, getInventoryMask, getOccupiedCells, moveItem, resolveFusion,
   placeItem, rotateItem, rotateShape, withCompletedLevels,
   type InventoryState, type Rotation,
 } from '../engine'
@@ -12,7 +12,6 @@ export type ExpeditionInventory = { bag: InventoryState; tray: readonly Unplaced
 export type InventoryCommand =
   | { kind: 'place' | 'move'; instanceId: string; anchor: Cell }
   | { kind: 'rotate'; instanceId: string }
-  | { kind: 'fuse'; firstId: string; secondId: string }
 
 const byId = new Map(items.map((item) => [item.id, item]))
 
@@ -23,7 +22,7 @@ export function inventoryView({ bag, tray }: ExpeditionInventory) {
     return {
       entry: { id: instance.instanceId, item, rotation: instance.rotation },
       anchor: instance.anchor,
-      cells: translate(rotateShape(instance.shape, instance.rotation), instance.anchor),
+      cells: getOccupiedCells(instance),
     }
   })
   return {
@@ -32,7 +31,8 @@ export function inventoryView({ bag, tray }: ExpeditionInventory) {
 }
 
 export type InventorySnapshot = ReturnType<typeof inventoryView>
-type Success = { ok: true; inventory: ExpeditionInventory }
+type FusionNotice = { item: Item; placed: boolean }
+type Success = { ok: true; inventory: ExpeditionInventory; fusion?: FusionNotice }
 type Failure = { ok: false; error: string }
 export type InventoryResponse = Success | Failure
 
@@ -46,10 +46,10 @@ export function previewPlacement({ bag, tray }: ExpeditionInventory, id: string,
   const item = placed ? { id: placed.itemId, shape: placed.shape } : unplaced?.item
   if (!item) return undefined
   const rotation = placed?.rotation ?? unplaced?.rotation ?? 0
-  return {
-    cells: translate(rotateShape(item.shape, rotation), anchor),
-    valid: canPlaceItem(bag, item, anchor, rotation, placed?.instanceId),
-  }
+  const cells = translate(rotateShape(item.shape, rotation), anchor)
+  const valid = canPlaceItem(bag, item, anchor, rotation, placed?.instanceId)
+  const fusion = valid ? adjacentRecipe(bag, id, item.id, cells) : undefined
+  return fusion ? { cells, valid, fusion: fusion.result } : { cells, valid }
 }
 
 function fusionRequest({ bag, tray }: ExpeditionInventory, firstId: string, secondId: string) {
@@ -59,15 +59,26 @@ function fusionRequest({ bag, tray }: ExpeditionInventory, firstId: string, seco
   return { firstInstanceId: firstId, secondInstanceId: secondId, resultInstanceId: `fusion-${sequence}` }
 }
 
-export function fusionOptions(inventory: ExpeditionInventory, firstId: string) {
-  const first = inventory.bag.items.find(({ instanceId }) => instanceId === firstId)
-  if (!first || byId.get(first.itemId)?.level !== 5) return []
-  return inventory.bag.items.flatMap((second) => {
-    const recipe = fusionRecipes.find(({ ingredients }) => ingredients.includes(first.itemId) && ingredients.includes(second.itemId))
-    const result = recipe && byId.get(recipe.result)
-    if (!result || !canFuse(inventory.bag, items, fusionRecipes, fusionRequest(inventory, firstId, second.instanceId))) return []
-    return [{ secondId: second.instanceId, name: byId.get(second.itemId)?.name, result }]
-  })
+function adjacentRecipe(bag: InventoryState, instanceId: string, itemId: string, cells: readonly Cell[]) {
+  if (bag.combatActive || byId.get(itemId)?.level !== 5) return undefined
+  for (const other of bag.items) {
+    if (other.instanceId === instanceId) continue
+    const result = findFusionResult(items, fusionRecipes, itemId, other.itemId)
+    if (result && findSharedEdge(cells, getOccupiedCells(other))) return { partnerId: other.instanceId, result }
+  }
+}
+
+function commitPlacement(inventory: ExpeditionInventory, instanceId: string): Success {
+  const instance = inventory.bag.items.find((entry) => entry.instanceId === instanceId)
+  if (!instance) return { ok: true, inventory }
+  const match = adjacentRecipe(inventory.bag, instanceId, instance.itemId, getOccupiedCells(instance))
+  if (!match) return { ok: true, inventory }
+  const request = fusionRequest(inventory, instanceId, match.partnerId)
+  const resolved = resolveFusion(inventory.bag, items, fusionRecipes, request)
+  if (!resolved) throw new Error('La fusión no pudo completarse.')
+  const { item, placed } = resolved
+  const tray = placed ? inventory.tray : [...inventory.tray, { id: request.resultInstanceId, item, rotation: 0 as const }]
+  return { ok: true, inventory: { bag: resolved.inventory, tray }, fusion: { item, placed } }
 }
 
 export function editInventory(inventory: ExpeditionInventory, command: InventoryCommand): InventoryResponse {
@@ -79,22 +90,19 @@ export function editInventory(inventory: ExpeditionInventory, command: Inventory
         const entry = tray.find(({ id }) => id === command.instanceId)
         if (!entry) return { ok: false, error: 'El objeto ya no está en la bandeja.' }
         const updated = placeItem(bag, entry.item, entry.id, command.anchor, entry.rotation)
-        return { ok: true, inventory: { bag: updated, tray: tray.filter(({ id }) => id !== entry.id) } }
+        return commitPlacement({ bag: updated, tray: tray.filter(({ id }) => id !== entry.id) }, entry.id)
       }
       case 'move':
-        return { ok: true, inventory: { ...inventory, bag: moveItem(bag, command.instanceId, command.anchor) } }
+        return commitPlacement({ ...inventory, bag: moveItem(bag, command.instanceId, command.anchor) }, command.instanceId)
       case 'rotate': {
         const entry = tray.find(({ id }) => id === command.instanceId)
-        if (!entry) return { ok: true, inventory: { ...inventory, bag: rotateItem(bag, command.instanceId) } }
+        if (!entry) return commitPlacement({ ...inventory, bag: rotateItem(bag, command.instanceId) }, command.instanceId)
         const rotation = ((entry.rotation + 90) % 360) as Rotation
         return { ok: true, inventory: { bag, tray: tray.map((item) => item.id === entry.id ? { ...item, rotation } : item) } }
       }
-      case 'fuse':
-        return { ok: true, inventory: { ...inventory, bag: fuseItems(bag, items, fusionRecipes, fusionRequest(inventory, command.firstId, command.secondId)) } }
     }
   } catch {
-    const error = command.kind === 'fuse' ? 'La combinación ya no está disponible o su resultado no cabe.'
-      : command.kind === 'rotate' ? 'La pieza no puede girar en su posición actual.'
+    const error = command.kind === 'rotate' ? 'La pieza no puede girar en su posición actual.'
       : 'La pieza completa debe estar dentro de la mochila, sobre casillas habilitadas y libres.'
     return { ok: false, error }
   }

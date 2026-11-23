@@ -1,5 +1,6 @@
-import { canPlaceItem, placeItem, removeItem } from '../inventory/inventory'
-import type { InventoryState, SpatialItemDefinition } from '../inventory/types'
+import { getInventoryCells } from '../inventory/capacity'
+import { canPlaceItem, findSharedEdge, getOccupiedCells, placeItem, removeItem } from '../inventory/inventory'
+import type { InventoryState, Rotation, SpatialItemDefinition } from '../inventory/types'
 
 export interface FusionItemDefinition extends SpatialItemDefinition {
   level: number
@@ -16,51 +17,51 @@ export interface FusionRequest {
   resultInstanceId: string
 }
 
-function recipeMatches(recipe: FusionRecipe, firstId: string, secondId: string): boolean {
-  return recipe.ingredients.includes(firstId) && recipe.ingredients.includes(secondId)
+export function findFusionResult<T extends FusionItemDefinition>(
+  items: readonly T[], recipes: readonly FusionRecipe[], firstId: string, secondId: string,
+): T | undefined {
+  if (firstId === secondId || ![firstId, secondId].every((id) =>
+    items.some((item) => item.id === id && item.level === 5))) return undefined
+  const recipe = recipes.find(({ ingredients }) => ingredients.includes(firstId) && ingredients.includes(secondId))
+  return items.find((item) => item.id === recipe?.result && item.level === 6)
 }
 
-export function canFuse(
+export function resolveFusion<T extends FusionItemDefinition>(
   inventory: InventoryState,
-  items: readonly FusionItemDefinition[],
+  items: readonly T[],
   recipes: readonly FusionRecipe[],
   request: FusionRequest,
-): boolean {
-  if (inventory.combatActive || request.firstInstanceId === request.secondInstanceId
-    || !request.resultInstanceId || inventory.items.some(({ instanceId }) => instanceId === request.resultInstanceId)) return false
-  const first = inventory.items.find(({ instanceId }) => instanceId === request.firstInstanceId)
-  const second = inventory.items.find(({ instanceId }) => instanceId === request.secondInstanceId)
-  if (!first || !second || first.itemId === second.itemId) return false
-  const firstDefinition = items.find(({ id }) => id === first.itemId)
-  const secondDefinition = items.find(({ id }) => id === second.itemId)
-  if (firstDefinition?.level !== 5 || secondDefinition?.level !== 5) return false
-  const recipe = recipes.find(({ ingredients }) => recipeMatches({ ingredients, result: '' }, first.itemId, second.itemId))
-  if (!recipe) return false
-  const result = items.find(({ id }) => id === recipe.result)
-  if (!result || result.level !== 6) return false
+) {
+  const { firstInstanceId, secondInstanceId, resultInstanceId } = request
+  if (inventory.combatActive || firstInstanceId === secondInstanceId || !resultInstanceId
+    || inventory.items.some(({ instanceId }) => instanceId === resultInstanceId)) return undefined
+  const first = inventory.items.find(({ instanceId }) => instanceId === firstInstanceId)
+  const second = inventory.items.find(({ instanceId }) => instanceId === secondInstanceId)
+  if (!first || !second || !findSharedEdge(getOccupiedCells(first), getOccupiedCells(second))) return undefined
+  const item = findFusionResult(items, recipes, first.itemId, second.itemId)
+  if (!item) return undefined
 
-  const reducedInventory: InventoryState = {
-    ...inventory,
-    items: inventory.items.filter(({ instanceId }) => instanceId !== first.instanceId && instanceId !== second.instanceId),
+  const reduced = removeItem(removeItem(inventory, firstInstanceId), secondInstanceId)
+  const anchors = [first.anchor, second.anchor, ...getInventoryCells(reduced.completedLevels)]
+  const rotations: readonly Rotation[] = [0, 90, 180, 270]
+  for (const rotation of rotations) {
+    const anchor = anchors.find((cell) => canPlaceItem(reduced, item, cell, rotation))
+    if (anchor) return { inventory: placeItem(reduced, item, resultInstanceId, anchor, rotation), item, placed: true }
   }
-  return canPlaceItem(reducedInventory, result, first.anchor, 0)
+  return { inventory: reduced, item, placed: false }
+}
+
+/** Compatibility API for callers whose result must remain on the board. */
+export function canFuse(
+  inventory: InventoryState, items: readonly FusionItemDefinition[], recipes: readonly FusionRecipe[], request: FusionRequest,
+): boolean {
+  return resolveFusion(inventory, items, recipes, request)?.placed === true
 }
 
 export function fuseItems(
-  inventory: InventoryState,
-  items: readonly FusionItemDefinition[],
-  recipes: readonly FusionRecipe[],
-  request: FusionRequest,
+  inventory: InventoryState, items: readonly FusionItemDefinition[], recipes: readonly FusionRecipe[], request: FusionRequest,
 ): InventoryState {
-  if (!canFuse(inventory, items, recipes, request)) throw new Error('These item instances do not match an available fusion recipe.')
-  const first = inventory.items.find(({ instanceId }) => instanceId === request.firstInstanceId)
-  if (!first) throw new Error(`Unknown item instance: ${request.firstInstanceId}`)
-  const firstId = first.itemId
-  const secondId = inventory.items.find(({ instanceId }) => instanceId === request.secondInstanceId)?.itemId
-  const recipe = recipes.find(({ ingredients }) => !!secondId && recipeMatches({ ingredients, result: '' }, firstId, secondId))
-  const result = items.find(({ id }) => id === recipe?.result)
-  if (!result) throw new Error('Fusion recipe result is missing from the item catalog.')
-
-  const consumed = removeItem(removeItem(inventory, request.firstInstanceId), request.secondInstanceId)
-  return placeItem(consumed, result, request.resultInstanceId, first.anchor)
+  const resolved = resolveFusion(inventory, items, recipes, request)
+  if (!resolved?.placed) throw new Error('These item instances do not match an available fusion recipe or the result does not fit.')
+  return resolved.inventory
 }

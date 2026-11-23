@@ -82,6 +82,15 @@
 .inventory-cell:disabled { opacity: 1; cursor: default; }
 .inventory-cell.preview-valid { background: #234d47; border-color: #75dfae; color: #c2fbe5; }
 .inventory-cell.preview-invalid { background: #53283c; border-color: #ff829c; color: #ffd2dd; }
+.inventory-cell.preview-fusion { background: #533a70; border: 2px solid var(--gold); color: #ffe5ac; }
+.fusion-guide { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.fusion-guide summary { cursor: pointer; color: var(--gold); font-weight: 700; }
+.fusion-recipe { margin: 12px 0; padding: 12px; border: 1px solid var(--line); }
+.fusion-ingredients { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.fusion-item { display: grid; gap: 4px; overflow-wrap: anywhere; min-width: 0; }
+.fusion-item .equipment-icon { --rarity-color: var(--gold); width: 36px; height: 36px; font-size: 18px; }
+.fusion-item small { color: #bab1d4; }
+.fusion-symbol, .fusion-availability { color: var(--gold); }
 .touch-placement { display: none; }
 @media (any-pointer: coarse) {
   .touch-placement { display: block; }
