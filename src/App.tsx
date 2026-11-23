@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { heroSprites } from './assets/heroSprites'
+import codexLogo from './assets/codex-logo.png'
 import './App.css'
 import { Backpack } from './components/inventory/Backpack'
+import { AudioControls } from './components/AudioControls'
+import { GameAudio } from './audio/gameAudio'
+import { sceneForCombat } from './audio/events'
+import { loadSoundPreferences, saveSoundPreferences, type SoundPreferences } from './audio/preferences'
 import { ArsenalScreen, ShopScreen, StarterItemsScreen } from './screens/EquipmentScreens'
 import { CombatScreen, ResultScreen, StageMap, StageNotice } from './screens/ExpeditionScreens'
 import { advanceEquipment, buyOffer, recordVictory, recoverAfterVictory, refreshOffers, startEquipmentSession, updateEquippedInventory, type EquipmentSession } from './data/equipmentSession'
@@ -33,14 +39,39 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
   const [storageError, setStorageError] = useState(false)
   const [combat, setCombat] = useState<CombatUpdate | null>(null)
   const [combatError, setCombatError] = useState<string | null>(null)
+  const [soundSettings, setSoundSettings] = useState(loadSoundPreferences)
+  const [audio] = useState(() => new GameAudio(soundSettings))
+  const levelUpSound = useRef(false)
   const activeCombat = useRef<AbortController | null>(null)
   const character = characters.find(({ id }) => id === selectedCharacter) ?? characters[0]
   const activeCharacter = characters.find(({ id }) => id === session?.character) ?? character
   const stages = stagesFor(activeCharacter.id)
   const currentStage = stages[stageIndex]
   const stage = currentStage
+  const screenMusic = screen === 'combat' ? 'encounter'
+    : screen === 'result' ? combat?.status === 'finished' ? sceneForCombat(stage.enemy.kind, combat.report.outcome) : null
+    : screen === 'preparation' || screen === 'shop' || screen === 'map' || screen === 'notice' ? 'preparation' : 'menu'
+  const levelsGained = combat?.status === 'finished' ? session?.pendingVictory?.levelsGained : undefined
 
   useEffect(() => () => activeCombat.current?.abort(), [])
+  useEffect(() => {
+    const onVisibility = () => audio.setVisible(!document.hidden)
+    onVisibility()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      audio.dispose()
+    }
+  }, [audio])
+  useEffect(() => {
+    if (screenMusic !== 'encounter') audio.setScene(screenMusic)
+  }, [audio, screenMusic])
+  useEffect(() => {
+    if (levelsGained && !levelUpSound.current) {
+      levelUpSound.current = true
+      audio.cue('levelUp', 'interface')
+    }
+  }, [audio, levelsGained])
   useEffect(() => {
     const saved = saveExpedition(session, stageIndex)
     let active = true
@@ -66,6 +97,8 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
     if (!session || session.pendingVictory || activeCombat.current) return
     setCombat(null)
     setCombatError(null)
+    levelUpSound.current = false
+    audio.beginEncounter(stage.enemy.kind)
     setScreen('combat')
     const controller = new AbortController()
     activeCombat.current = controller
@@ -76,11 +109,13 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
       controller.abort()
       activeCombat.current = null
       lockInventory(false)
+      audio.setScene(null)
       setCombatError('El motor no pudo iniciar o completar el combate. Vuelve a preparación para reintentar.')
     }
     try {
       const task = engine.startCombat({ character: session.character, stage, inventory: lockedInventory, hero: session.hero }, (update) => {
         if (controller.signal.aborted) return
+        audio.combatUpdate(update)
         setCombat(update)
         if (update.status === 'finished') {
           controller.abort()
@@ -119,8 +154,18 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
   function inventoryCommand(command: InventoryCommand): InventoryResponse {
     if (!session || screen !== 'preparation' || activeCombat.current) return { ok: false, error: 'La mochila está bloqueada.' }
     const result = editInventory(session.inventory, command)
-    if (result.ok) setSession(updateEquippedInventory(session, result.inventory))
+    if (result.ok) {
+      setSession(updateEquippedInventory(session, result.inventory))
+      if (result.fusion) audio.cue('fusion', 'interface')
+    }
     return result
+  }
+
+  function changeSound(next: SoundPreferences) {
+    setSoundSettings(next)
+    saveSoundPreferences(next)
+    audio.setPreferences(next)
+    if (next.enabled) void audio.unlock()
   }
 
   const combatView = screen === 'combat' || screen === 'result' || screen === 'notice'
@@ -129,7 +174,9 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
     ? victorySnapshot(combat, session)
     : combat
 
-  return <main className="game-shell">
+  return <main className="game-shell" onClickCapture={(event) => {
+    if (!(event.target instanceof Element) || !event.target.closest('[data-audio-controls]')) void audio.unlock()
+  }}>
     <header className="topbar">
       <button className="brand" disabled={combatView} onClick={() => setScreen('menu')} aria-label="Volver al menú principal">
         <span className="brand-mark">AR</span><span>ANIME <strong>ROGUELIKE</strong></span>
@@ -137,6 +184,8 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
       <div className="top-status"><span className="status-dot" /> NIVEL {stage.level} · ETAPA {stage.number}
         {session && <><span className="gold" aria-hidden="true">◆</span> {session.gold} de oro</>}
       </div>
+      <AudioControls settings={soundSettings} onChange={changeSound}
+        onPreview={() => { void audio.unlock().then((ready) => { if (ready) audio.cue('select', 'interface') }) }} />
     </header>
     {storageError && <p className="stage-notice screen-padding" role="status">El navegador no permite guardar la expedición.</p>}
     {screen === 'menu' && <Menu onNavigate={setScreen} canResume={session !== null} />}
@@ -148,7 +197,10 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
       onMap={() => setScreen('map')} onNotice={() => setScreen('notice')} />}
     {screen === 'shop' && session && <ShopScreen session={session} onBack={() => setScreen('preparation')}
       onBuy={(id) => {
-        setSession((current) => current && buyOffer(current, id))
+        const updated = buyOffer(session, id)
+        if (updated === session) return
+        setSession(updated)
+        audio.cue('purchase', 'interface')
       }}
       onRefresh={() => setSession((current) => current && refreshOffers(current))} />}
     {screen === 'map' && <StageMap current={currentStage} demo={false} onBack={() => setScreen('preparation')} onPreview={() => {}} />}
@@ -193,7 +245,47 @@ function Menu({ onNavigate, canResume }: { onNavigate: (screen: Screen) => void;
   </section>
 }
 
-function CharacterSelect({ selected, onSelect, onContinue, onBack }: { selected: CharacterId; onSelect: (id: CharacterId) => void; onContinue: () => void; onBack: () => void }) { return <section className="screen-padding inner-screen"><div className="section-heading"><button className="back-button" onClick={onBack}>← MENÚ</button><p className="eyebrow">PASO 01 / 03</p><h2>ELIGE TU <span>CAMPEÓN</span></h2><p>Dos caminos. Una expedición. Elige quién luchará por ti.</p></div><div className="character-grid">{characters.map((item) => <button key={item.id} className={`character-card ${selected === item.id ? 'selected' : ''}`} onClick={() => onSelect(item.id)} style={{ '--character-color': item.color } as React.CSSProperties}><div className="portrait">{item.id === 'goku' ? '悟' : '忍'}</div><div className="character-info"><p className="eyebrow">{item.anime}</p><h3>{item.name}</h3><strong>{item.role}</strong><p>{item.description}</p>{item.stats.map((stat) => <div className="stat" key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong></div>)}</div><span className="select-indicator">{selected === item.id ? '✓ SELECCIONADO' : 'SELECCIONAR'}</span></button>)}</div><div className="bottom-action"><span>Tu elección define el arsenal inicial.</span><button className="primary-button" onClick={onContinue}>CONTINUAR →</button></div></section> }
+function CharacterSelect({ selected, onSelect, onContinue, onBack }: {
+  selected: CharacterId
+  onSelect: (id: CharacterId) => void
+  onContinue: () => void
+  onBack: () => void
+}) {
+  return <section className="screen-padding inner-screen">
+    <div className="section-heading">
+      <button className="back-button" onClick={onBack}>← MENÚ</button>
+      <p className="eyebrow">PASO 01 / 03</p>
+      <h2>ELIGE TU <span>CAMPEÓN</span></h2>
+      <p>Dos caminos. Una expedición. Elige quién luchará por ti.</p>
+    </div>
+    <div className="character-grid">
+      {characters.map((character) => {
+        const isSelected = selected === character.id
+        return <button key={character.id} className={`character-card${isSelected ? ' selected' : ''}`}
+          aria-pressed={isSelected} onClick={() => onSelect(character.id)}
+          style={{ '--character-color': character.color } as React.CSSProperties}>
+          <div className="portrait">
+            <img src={heroSprites[character.id].base} alt="" draggable={false} />
+          </div>
+          <div className="character-info">
+            <p className="eyebrow">{character.anime}</p>
+            <h3>{character.name}</h3>
+            <strong>{character.role}</strong>
+            <p>{character.description}</p>
+            {character.stats.map(({ label, value }) => <div className="stat" key={label}>
+              <span>{label}</span><strong>{value}</strong>
+            </div>)}
+          </div>
+          <span className="select-indicator">{isSelected ? '✓ SELECCIONADO' : 'SELECCIONAR'}</span>
+        </button>
+      })}
+    </div>
+    <div className="bottom-action">
+      <span>Tu elección define el arsenal inicial.</span>
+      <button className="primary-button" onClick={onContinue}>CONTINUAR →</button>
+    </div>
+  </section>
+}
 
 function Preparation({ character, session, stage, onInventoryCommand, onBack, onCredits, onShop, onMap, onNotice }: {
   character: Character
@@ -244,6 +336,21 @@ function Preparation({ character, session, stage, onInventoryCommand, onBack, on
   </section>
 }
 
-function Credits({ onBack }: { onBack: () => void }) { return <section className="screen-padding credits-screen"><button className="back-button" onClick={onBack}>← MENÚ</button><div className="credits-card"><p className="eyebrow">REGISTRO DE EXPEDICIÓN</p><h2>ANIME <span>ROGUELIKE</span></h2><div className="codex-placeholder"><span>CODEX</span><small>ESPACIO RESERVADO PARA EL LOGO OFICIAL</small></div><p>Una experiencia roguelike autobattler de inventario espacial.</p><div className="credits-meta"><span>REACT · TYPESCRIPT · VITE</span><span>CREADO PARA EL HACKATHON</span><span>ASISTENCIA DE CODEX</span></div><p className="credits-note">El recurso oficial del logo Codex será incorporado cuando esté disponible.</p></div></section> }
+function Credits({ onBack }: { onBack: () => void }) {
+  return <section className="screen-padding credits-screen">
+    <button className="back-button" onClick={onBack}>← MENÚ</button>
+    <div className="credits-card">
+      <p className="eyebrow">REGISTRO DE EXPEDICIÓN</p>
+      <h2>ANIME <span>ROGUELIKE</span></h2>
+      <img className="codex-credit-logo" src={codexLogo} alt="Logo de Codex" width={640} height={640} />
+      <p>Una experiencia roguelike autobattler de inventario espacial.</p>
+      <div className="credits-meta">
+        <span>REACT · TYPESCRIPT · VITE</span>
+        <span>CREADO PARA EL HACKATHON</span>
+        <span>ASISTENCIA DE CODEX</span>
+      </div>
+    </div>
+  </section>
+}
 
 export default App

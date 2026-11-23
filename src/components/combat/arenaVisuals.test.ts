@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { CombatEvent } from '../../adapters/gameEngineAdapter'
+import { heroSprites } from '../../assets/heroSprites'
 import { stagesFor } from '../../data/levels'
 import { advanceCombat, createCombat } from '../../engine'
 import { AnimatedSprite } from './AnimatedSprite'
@@ -35,11 +36,39 @@ describe('arena visual assets', () => {
 
   it('renders a placeholder without loading an image when no PNG is registered', () => {
     const html = renderToStaticMarkup(createElement(AnimatedSprite, {
-      visual: heroVisual('naruto'), playback: { id: 'idle', pose: 'idle' }, facing: 'left',
+      visual: enemyVisual(stages[0]), playback: { id: 'idle', pose: 'idle' }, facing: 'left',
     }))
     expect(html).toContain('sprite-placeholder')
     expect(html).toContain('data-facing="left"')
     expect(html).not.toContain('<img')
+  })
+
+  it('uses the local Itachi sprite for the major boss at the end of Naruto’s fourth level', () => {
+    const stage = stagesFor('naruto').find(({ level, total, number }) => level === 4 && number === total)!
+    expect(stage.enemy).toMatchObject({ id: 'naruto-itachi', kind: 'major' })
+    const idle = resolveClip(enemyVisual(stage), 'idle')
+    expect(idle).toMatchObject({ kind: 'png', src: expect.stringContaining('/naruto/itachi/idle.png') })
+    expect(resolveClip(enemyVisual(stage), 'attack')).toEqual(idle)
+  })
+
+  it.each(['goku', 'naruto'] as const)('reuses the still image for the CSS poses of %s', (hero) => {
+    for (const pose of ['idle', 'attack', 'hurt', 'death', 'special'] as const) {
+      expect(resolveClip(heroVisual(hero), pose)).toEqual({ kind: 'png', src: heroSprites[hero].base })
+    }
+    const html = renderToStaticMarkup(createElement(AnimatedSprite, {
+      visual: heroVisual(hero), playback: { id: 'attack-1', pose: 'attack' },
+    }))
+    expect(html).toContain(heroSprites[hero].base)
+    expect(html).toContain('data-pose="attack"')
+  })
+
+  it('uses attested forms only for their matching hero and keeps the other artwork separate', () => {
+    expect(resolveClip(heroVisual('goku', 'ultra-instinct'), 'special'))
+      .toEqual({ kind: 'png', src: heroSprites.goku.forms['ultra-instinct'] })
+    expect(resolveClip(heroVisual('naruto', 'nine-tails-chakra'), 'idle'))
+      .toEqual({ kind: 'png', src: heroSprites.naruto.forms['nine-tails-chakra'] })
+    expect(heroVisual('naruto', 'ultra-instinct')).toBe(heroVisual('naruto'))
+    expect(heroSprites.naruto.references).toHaveLength(2)
   })
 })
 

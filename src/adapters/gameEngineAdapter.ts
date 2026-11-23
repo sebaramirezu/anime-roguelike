@@ -1,4 +1,5 @@
 import type { CharacterId } from '../data/items'
+import type { HeroForm } from '../data/heroForms'
 import type { Stage } from '../data/levels'
 import type { HeroProgress, InventoryState } from '../engine'
 
@@ -16,6 +17,7 @@ export type Combatant = {
   maxHealth?: number
   shield?: number
   maxShield?: number
+  visualForm?: HeroForm
   progression?: { level: number; xp: number; xpNeeded: number }
   bonuses?: { maxHealth: number; armor: number; maxShield: number }
   stats?: Stats
@@ -32,6 +34,7 @@ export type CombatEvent = {
   techniqueId?: string
   visual?: { theme: string; special?: boolean }
   amount?: number
+  critical?: boolean
 }
 
 export type CombatReport = {

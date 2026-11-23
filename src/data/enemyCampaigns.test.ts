@@ -16,7 +16,7 @@ describe('campaign progression and roster', () => {
   it('keeps 92 assignments and the five major bosses for each campaign in order', () => {
     expect(cases).toHaveLength(92)
     const bosses = {
-      goku: ['Raditz', 'Vegeta', 'Freezer', 'Cell', 'Majin Buu'],
+      goku: ['Piccolo', 'Vegeta', 'Freezer', 'Cell', 'Majin Buu'],
       naruto: ['Zabuza', 'Orochimaru', 'Gaara', 'Itachi', 'Pain'],
     }
     for (const champion of champions) {
@@ -30,6 +30,14 @@ describe('campaign progression and roster', () => {
     }
     expect(new Set(allEnemies.map(({ id }) => id)).size).toBe(allEnemies.length)
     expect(enemySpriteRegistry.size).toBe(allEnemies.length)
+  })
+
+  it('uses Raditz in all 27 normal stages of Goku’s campaign and Piccolo as the first major boss', () => {
+    const campaign = stagesFor('goku')
+    const normal = campaign.filter(({ enemy }) => enemy.kind === 'normal')
+    expect(normal).toHaveLength(27)
+    expect(new Set(normal.map(({ enemy }) => enemy.id))).toEqual(new Set(['goku-raditz']))
+    expect(campaign[11]).toMatchObject({ level: 1, number: 12, enemy: { id: 'goku-piccolo', kind: 'major' } })
   })
 
   it('rejects a combat request using the other champion’s campaign', () => {

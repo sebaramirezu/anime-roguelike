@@ -1,0 +1,25 @@
+.audio-settings { position: relative; margin-left: clamp(8px, 3vw, 30px); color: var(--ink); }
+.audio-settings summary { cursor: pointer; padding: 9px; color: var(--gold); }
+.audio-settings-panel {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 10;
+  display: grid;
+  gap: 10px;
+  width: min(260px, calc(100vw - 32px));
+  max-height: min(500px, 75svh);
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #17122b;
+  box-shadow: 0 12px 30px #060411bb;
+}
+.audio-slider { display: grid; gap: 4px; }
+.audio-slider span { display: flex; justify-content: space-between; }
+.audio-slider output, .audio-settings-panel small { color: var(--muted); }
+.audio-slider input { width: 100%; margin: 0; accent-color: var(--gold); }
+.audio-channel { display: grid; gap: 3px; border-top: 1px solid var(--line); padding-top: 8px; }
+.audio-mute { display: flex; align-items: center; gap: 5px; }
+.audio-mute input { accent-color: var(--gold); }
+.audio-settings-panel .secondary-button { padding: 8px; }

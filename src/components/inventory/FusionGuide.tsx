@@ -1,12 +1,13 @@
 import { fusionRecipes } from '../../data/fusionRecipes'
 import type { InventorySnapshot } from '../../data/expeditionInventory'
 import { items, type Item } from '../../data/items'
+import { ItemIcon } from './ItemIcon'
 
 const catalogue = new Map(items.map((item) => [item.id, item]))
 
 function RecipeItem({ item, status }: { item: Item; status?: string }) {
   return <div className="fusion-item">
-    <span className="equipment-icon" aria-hidden="true">{item.icon}</span>
+    <ItemIcon item={item} framed />
     <strong>{item.name}</strong>
     <small>Nivel {item.level}{status && ` · ${status}`}</small>
   </div>

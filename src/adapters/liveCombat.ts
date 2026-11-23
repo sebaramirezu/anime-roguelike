@@ -1,5 +1,7 @@
 import { advanceCombat, createCombat, createHeroProgress, getCombatResult, type CombatantState } from '../engine'
 import { enemyLoadout, playerLoadout, victoryGold } from '../data/combatLoadout'
+import { heroForms, type HeroForm } from '../data/heroForms'
+import { items } from '../data/items'
 import type { CombatEvent, Combatant, GameEngineAdapter } from './gameEngineAdapter'
 
 const combatTickMs = 100
@@ -28,6 +30,10 @@ export const liveCombat: GameEngineAdapter = {
     if (signal.aborted) return
     if (stage.character !== character) throw new Error('La etapa no pertenece a la campaña del personaje.')
     const player = playerLoadout(character, hero, inventory)
+    const formId = heroForms[character]
+    const equippedForm = inventory.items.some(({ itemId }) => itemId === formId)
+      ? items.find(({ id }) => id === formId) : undefined
+    let visualForm: HeroForm | undefined
     const { weaponNames, techniqueIds } = player
     const enemyAbilities = new Map(stage.enemy.abilities.map((ability) => [ability.id, ability]))
     const enemyNames = new Map(stage.enemy.abilities.map(({ id, name }) => [id, name]))
@@ -38,6 +44,7 @@ export const liveCombat: GameEngineAdapter = {
       player: {
         ...combatantView(state.player, weaponNames), bonuses: player.bonuses,
         progression: { level: player.level, xp: player.xp, xpNeeded: player.xpNeeded },
+        visualForm,
       },
       enemy: combatantView(state.enemy, enemyNames),
     })
@@ -50,16 +57,18 @@ export const liveCombat: GameEngineAdapter = {
     }
     function tick() {
       const events: CombatEvent[] = []
+      let firstFormAttack = false
       function record(event: Omit<CombatEvent, 'id'>) {
         events.push({ ...event, id: String(++eventId) })
       }
-      state = advanceCombat(state, combatTickMs, ({ source, weaponId, damage, absorbed = 0, lethal }) => {
+      state = advanceCombat(state, combatTickMs, ({ source, weaponId, damage, absorbed = 0, lethal, critical }) => {
         const target = source === 'player' ? 'enemy' : 'player'
         const ability = source === 'enemy' ? enemyAbilities.get(weaponId) : undefined
         const name = ability?.name ?? weaponNames.get(weaponId) ?? 'Ataque'
         const techniqueId = ability?.id ?? techniqueIds.get(weaponId)
         const visual = ability && { theme: ability.theme, special: ability.special }
         if (source === 'player') {
+          firstFormAttack ||= !!equippedForm && !visualForm
           totals.attacks++
           totals.damageDealt += damage
           totals.shieldDamageDealt += absorbed
@@ -69,7 +78,7 @@ export const liveCombat: GameEngineAdapter = {
         }
         record({ kind: 'attack', source, target, techniqueId, visual, text: name })
         if (absorbed > 0) record({ kind: 'shield', source, target, techniqueId, amount: absorbed, text: `El escudo absorbe ${Math.round(absorbed)} de ${name}.` })
-        if (damage > 0) record({ kind: 'damage', source, target, techniqueId, amount: damage, text: `${name} inflige ${Math.round(damage)} de daño a la vida.` })
+        if (damage > 0) record({ kind: 'damage', source, target, techniqueId, amount: damage, critical, text: `${name} inflige ${Math.round(damage)} de daño a la vida.` })
         if (lethal) record({ kind: 'death', target, text: target === 'enemy' ? `${stage.enemy.name} cae.` : 'El campeón cae.' })
       }, ({ target, name, healed, buff }) => {
         if (target === 'player') {
@@ -79,6 +88,12 @@ export const liveCombat: GameEngineAdapter = {
         if (healed > 0) record({ kind: 'heal', target, amount: healed, text: `${name} cura ${Math.round(healed)} de vida.` })
         if (buff) record({ kind: 'effect', target, text: `${name} acelera la recarga.` })
       })
+      // A form is cosmetic and follows the first resolved attack by the equipped hero.
+      if (firstFormAttack && equippedForm && state.player.health > 0) {
+        visualForm = formId
+        record({ kind: 'transform', source: 'player', target: 'player', techniqueId: formId,
+          text: `${equippedForm.name}: cambio de forma.` })
+      }
       if (events.length) recentEvents = [...recentEvents, ...events].slice(-32)
       const snapshot = {
         ...snapshotOf(), recentEvents,

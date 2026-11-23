@@ -41,6 +41,7 @@ export type ResolvedAttack = {
   weaponId: string
   damage: number
   absorbed?: number
+  critical?: boolean
   lethal: boolean
 }
 

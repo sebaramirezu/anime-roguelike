@@ -1,18 +1,13 @@
 import { useState, type ReactNode } from 'react'
+import { heroSprites } from '../assets/heroSprites'
 import { ItemShape, Tray } from '../components/inventory/Backpack'
+import { ItemIcon } from '../components/inventory/ItemIcon'
 import { catalogFor, type CharacterId, type Item } from '../data/items'
 import { equipmentConfig, selectedSupply, supplyCost, validStarterSelection, type EquipmentSession } from '../data/equipmentSession'
 
-function ItemIcon({ item }: { item: Item }) {
-  const [failed, setFailed] = useState(false)
-  return <span aria-hidden="true" className="equipment-icon">
-    {item.iconPng && !failed ? <img src={item.iconPng} alt="" onError={() => setFailed(true)} /> : item.icon}
-  </span>
-}
-
 function ItemCard({ item, children }: { item: Item; children?: ReactNode }) {
   return <article className="equipment-card panel" data-tier={item.level}>
-    <header><ItemIcon item={item} /><div>
+    <header><ItemIcon item={item} framed /><div>
       <p className="equipment-tier">Nivel {item.level} · {item.rarity}</p>
       <h3>{item.name}</h3>
       <small>{item.category} · {item.universe}</small>
@@ -115,6 +110,7 @@ export function ArsenalScreen({ character, onSelect, onBack }: {
   onSelect: (character: CharacterId) => void
   onBack: () => void
 }) {
+  const references = heroSprites[character].references
   return <section className="screen-padding inner-screen">
     <div className="section-heading">
       <button className="back-button" onClick={onBack}>← MENÚ</button>
@@ -126,6 +122,13 @@ export function ArsenalScreen({ character, onSelect, onBack }: {
       <button className="secondary-button" aria-pressed={character === 'goku'} onClick={() => onSelect('goku')}>GOKU</button>
       <button className="secondary-button" aria-pressed={character === 'naruto'} onClick={() => onSelect('naruto')}>NARUTO</button>
     </div>
+    {references.length > 0 && <details className="hero-art-references">
+      <summary>Variantes visuales de Naruto</summary>
+      <div>{references.map(({ src, label }) => <figure key={src}>
+        <img src={src} alt={`Naruto: ${label}`} loading="lazy" />
+        <figcaption>{label}</figcaption>
+      </figure>)}</div>
+    </details>}
     <div className="equipment-grid">{catalogFor(character).map((item) => <ItemCard key={item.id} item={item}>
       <small>{item.price === null ? 'Solo por fusión futura' : `${item.price} ◆ de oro`}</small>
     </ItemCard>)}</div>

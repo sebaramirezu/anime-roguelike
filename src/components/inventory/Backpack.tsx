@@ -3,6 +3,7 @@ import type { Cell, Item } from '../../data/items'
 import { inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand, type InventoryResponse, type UnplacedEntry } from '../../data/expeditionInventory'
 import { rotateShape, type Rotation } from '../../engine'
 import { FusionGuide } from './FusionGuide'
+import { ItemIcon } from './ItemIcon'
 
 export function ItemShape({ item, rotation = 0 }: { item: Item; rotation?: Rotation }) {
   const shape = rotateShape(item.shape, rotation)
@@ -27,10 +28,10 @@ export function Tray({ entries, selected, onSelect }: {
     <ul>{entries.map(({ id, item, rotation }) => <li key={id}>
       {onSelect
         ? <button type="button" aria-pressed={id === selected} onClick={() => onSelect(id)}>
-            <span><b aria-hidden="true">{item.icon}</b> {item.name}</span><ItemShape item={item} rotation={rotation} />
+            <span className="item-name"><ItemIcon item={item} />{item.name}</span><ItemShape item={item} rotation={rotation} />
           </button>
         : <div className="tray-entry">
-            <span><b aria-hidden="true">{item.icon}</b> {item.name}</span><ItemShape item={item} rotation={rotation} />
+            <span className="item-name"><ItemIcon item={item} />{item.name}</span><ItemShape item={item} rotation={rotation} />
           </div>}
     </li>)}</ul>
   </section>
@@ -78,6 +79,8 @@ export function Backpack({ inventory, onCommand }: {
         const cell = [column, row] as const
         const occupant = placed.find(({ cells }) => cells.some(([x, y]) => x === column && y === row))
         const projected = preview?.cells.some(([x, y]) => x === column && y === row)
+        const imageCell = occupant ? occupant.cells[0] : preview?.cells[0]
+        const icon = imageCell?.[0] === column && imageCell[1] === row ? occupant?.entry.item ?? entry?.item : undefined
         const previewClass = projected ? preview?.fusion ? ' preview-fusion'
           : preview?.valid ? ' preview-valid' : ' preview-invalid' : ''
         return <button key={`${column}-${row}`} type="button"
@@ -101,13 +104,14 @@ export function Backpack({ inventory, onCommand }: {
               select(occupant.entry.id, occupant.anchor)
             }
           }}
-        >{occupant?.entry.item.icon ?? (projected ? entry?.item.icon : undefined)}</button>
+        >{icon && <ItemIcon key={icon.id} item={icon} />}</button>
       }))}
     </div>
     <p className="equipment-note">Selecciona un objeto y pulsa una casilla para colocarlo. Pulsa una pieza colocada para moverla o rotarla.</p>
     {entry && <p className="touch-placement equipment-note">En pantalla táctil, pulsa una vez para ver la posición y otra para confirmarla.</p>}
     {entry && <p className="equipment-note" role="status">
-      {entry.item.name} · {entry.rotation}° · Fila {anchor[1] + 1}, columna {anchor[0] + 1} · {preview?.valid ? 'Posición válida' : 'Posición inválida'}
+      <span className="item-name"><ItemIcon key={entry.item.id} item={entry.item} />{entry.item.name}</span>
+      {' · '}{entry.rotation}° · Fila {anchor[1] + 1}, columna {anchor[0] + 1} · {preview?.valid ? 'Posición válida' : 'Posición inválida'}
     </p>}
     {preview?.fusion && <p className="fusion-availability" role="status">Al confirmar: fusión en {preview.fusion.name}.</p>}
     {entry && <div className="equipment-summary">

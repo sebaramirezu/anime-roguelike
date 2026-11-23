@@ -41,9 +41,7 @@ function roster(character: CharacterId, kind: EnemyKind, entries: readonly Roste
 export const enemyRoster = {
   goku: {
     normal: roster('goku', 'normal', [
-      ['freezer-scout', 'Explorador de Freezer', 'EF', '#af8df9', 20, ['Disparo de explorador', 3, 1600, 'ki']],
-      ['freezer-infantry', 'Soldado de Freezer', 'SF', '#d7abea', 23, ['Ráfaga de Ki', 4, 1950, 'ki']],
-      ['freezer-assault', 'Asalto de Freezer', 'AF', '#90ddcc', 26, ['Carga de asalto', 5, 2200, 'strike']],
+      ['raditz', 'Raditz', 'RA', '#b5a2db', 22, ['Ráfaga saiyajin', 4, 1850, 'ki']],
     ]),
     minor: roster('goku', 'minor', [
       ['cui', 'Cui', 'CU', '#ac82e0', 31, ['Ráfaga de emboscada', 5, 1950, 'ki']],
@@ -62,7 +60,7 @@ export const enemyRoster = {
       ['dabura', 'Dabura', 'DA', '#ee988c', 55, ['Corte infernal', 8, 2300, 'blade'], ['Llamarada demoníaca', 7, 5600, 'beam']],
     ]),
     major: roster('goku', 'major', [
-      ['raditz', 'Raditz', 'RA', '#b5a2db', 49, ['Ataque doble', 6, 1950, 'strike'], ['Ráfaga saiyajin', 6, 4300, 'ki']],
+      ['piccolo', 'Piccolo', 'PI', '#9bd77f', 49, ['Onda de Ki', 6, 1950, 'ki'], ['Makankōsappō', 6, 4300, 'beam']],
       ['vegeta', 'Vegeta', 'VE', '#8eafff', 57, ['Ráfaga real', 7, 1800, 'ki'], ['Cañón Galick', 11, 5100, 'beam']],
       ['freezer', 'Freezer', 'FR', '#f8abd9', 64, ['Rayo de la muerte', 8, 1830, 'beam'], ['Bola de la muerte', 12, 5800, 'ki']],
       ['cell', 'Cell', 'CE', '#a9dc91', 74, ['Golpe perfecto', 9, 1810, 'strike'], ['Kamehameha de Cell', 13, 5800, 'beam']],

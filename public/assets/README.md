@@ -1,6 +1,6 @@
 # Recursos visuales de la arena
 
-Los personajes, monstruos, escenarios y efectos provisionales de la arena se dibujan con CSS. El registro de `src/components/combat/arenaVisuals.ts` acepta PNG de esta carpeta. Un recurso ausente usa la silueta CSS. Una ruta que falla queda descartada para ese combatiente durante la arena.
+Los PNG existentes de los héroes se importan desde `src/assets/items/png/` en `src/assets/heroSprites.ts`. Los iconos de objetos se resuelven por separado en `src/assets/itemIcons.ts`, con preferencia por SVG y respaldo PNG. Los escenarios y las animaciones de poses estáticas usan CSS.
 
 ## PNG y fotogramas
 
@@ -21,9 +21,12 @@ clips: {
 
 ## Personajes y monstruos
 
-- Personajes: `heroes/goku/` y `heroes/naruto/`.
+- Goku usa `gokufase1.png` en su forma base y `gokufase2.png` con Migatte no Gokui. Naruto usa `narutofase1.png` en su forma base y `naruto2.png` con Chakra del Kyubi. Si la técnica está colocada en la mochila, el cambio visual se activa en el primer ataque real del campeón y dura el resto del combate. No modifica sus estadísticas.
+- `naruto1-removebg-preview.png` y `naruto3-removebg-preview.png` se muestran como referencia de pose base y de manto dorado de chakra en el arsenal de Naruto. Ambas conservan la cuadrícula visible del archivo original.
 - Enemigos por campaña: `enemies/goku/<enemigo>/` y `enemies/naruto/<enemigo>/`. Por ejemplo, Raditz usa `enemies/goku/raditz/` y Zabuza, `enemies/naruto/zabuza/`.
 - El registro `enemySpriteRegistry` genera las rutas de cada pose a partir de los IDs de `src/data/enemies.ts`. Para activar los PNG, declarar los clips entregados en `installedEnemyClips` con el ID del enemigo, por ejemplo `goku-raditz`. Cada enemigo conserva su ruta si aparece en más de una etapa.
 - Para una animación nueva, añadir el clip a la pose correspondiente del registro. Para dar un estilo a una técnica, usar el ID real del catálogo de objetos en `techniques`. Los recursos y estilos visuales se pueden cambiar sin tocar el motor.
 
-Actualmente los 47 enemigos usan siluetas CSS con distintivo propio. Ninguno tiene un PNG definitivo registrado. El motor emite ataques, daño y bajas. Los efectos de curación y transformación están preparados para eventos `heal` y `transform`, pendientes de una fuente real en el adaptador actual.
+Los enemigos sin imágenes usan siluetas CSS con distintivo propio. El registro carga automáticamente los PNG por pose desde `src/assets/enemies/<campaña>/<enemigo>/`. Por ejemplo, `src/assets/enemies/goku/piccolo/idle.png` para el primer jefe y `src/assets/enemies/goku/raditz/idle.png` para los encuentros normales de esa campaña.
+
+Itachi ya usa `src/assets/enemies/naruto/itachi/idle.png` en la etapa final del cuarto nivel. Los enemigos comunes de Naruto pueden compartir `src/assets/enemies/naruto/common/idle.png`. Si alguno tiene un PNG propio, tendrá prioridad sobre la imagen compartida.

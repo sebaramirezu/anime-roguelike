@@ -1,4 +1,6 @@
 import type { CombatEvent, CombatReport } from '../../adapters/gameEngineAdapter'
+import { heroSprites } from '../../assets/heroSprites'
+import { heroForms, type HeroForm } from '../../data/heroForms'
 import type { CharacterId } from '../../data/items'
 import { allEnemies, type EnemyDefinition, type EnemyKind } from '../../data/enemies'
 import type { Stage } from '../../data/levels'
@@ -21,22 +23,41 @@ export type SpriteVisual = {
 export const assetPath = (path: string) => `${import.meta.env.BASE_URL}assets/${path}`
 
 const heroes: Record<CharacterId, SpriteVisual> = {
-  goku: { folder: 'heroes/goku', shape: 'brawler', color: '#ffbb65' },
-  naruto: { folder: 'heroes/naruto', shape: 'scout', color: '#81e5ff' },
+  goku: { folder: 'heroes/goku', shape: 'brawler', color: '#ffbb65', clips: { idle: { kind: 'png', src: heroSprites.goku.base } } },
+  naruto: { folder: 'heroes/naruto', shape: 'scout', color: '#81e5ff', clips: { idle: { kind: 'png', src: heroSprites.naruto.base } } },
 }
+
+function transformedHero(id: CharacterId): SpriteVisual {
+  const src = heroSprites[id].forms[heroForms[id]]
+  return src ? { ...heroes[id], clips: { idle: { kind: 'png', src } } } : heroes[id]
+}
+
+const transformedHeroes = { goku: transformedHero('goku'), naruto: transformedHero('naruto') }
 
 const enemyShapes: Record<EnemyKind, string> = { normal: 'trooper', minor: 'guardian', major: 'colossus' }
 type EnemySprite = SpriteVisual & { png: Readonly<Record<Pose, string>> }
 
 // Add clips here when their local PNGs are available. Planned paths do not issue requests.
 const installedEnemyClips: Partial<Record<string, SpriteVisual['clips']>> = {}
+const localEnemyPngs = import.meta.glob<string>('../../assets/enemies/*/*/*.png', {
+  eager: true, query: '?url', import: 'default',
+})
+const poses = ['idle', 'attack', 'hurt', 'death', 'special'] as const
 
 function enemySprite(enemy: EnemyDefinition): EnemySprite {
   const slug = enemy.id.slice(enemy.character.length + 1)
   const folder = `enemies/${enemy.character}/${slug}`
+  const sharedFolder = enemy.character === 'naruto' && enemy.kind === 'normal'
+    ? 'enemies/naruto/common' : undefined
+  const clips: NonNullable<SpriteVisual['clips']> = { ...installedEnemyClips[enemy.id] }
+  for (const pose of poses) {
+    const src = localEnemyPngs[`../../assets/${folder}/${pose}.png`]
+      ?? (sharedFolder ? localEnemyPngs[`../../assets/${sharedFolder}/${pose}.png`] : undefined)
+    if (src && !clips[pose]) clips[pose] = { kind: 'png', src }
+  }
   return {
     folder, shape: enemyShapes[enemy.kind], color: enemy.color, mark: enemy.mark,
-    clips: installedEnemyClips[enemy.id],
+    clips,
     png: {
       idle: assetPath(`${folder}/idle.png`), attack: assetPath(`${folder}/attack.png`),
       hurt: assetPath(`${folder}/hurt.png`), death: assetPath(`${folder}/death.png`),
@@ -49,7 +70,9 @@ export const enemySpriteRegistry: ReadonlyMap<string, EnemySprite> = new Map(
   allEnemies.map((enemy) => [enemy.id, enemySprite(enemy)]),
 )
 
-export function heroVisual(id: CharacterId) { return heroes[id] }
+export function heroVisual(id: CharacterId, form?: HeroForm): SpriteVisual {
+  return form === heroForms[id] ? transformedHeroes[id] : heroes[id]
+}
 
 export function enemyVisual(stage: Stage): EnemySprite {
   return enemySpriteRegistry.get(stage.enemy.id) ?? enemySprite(stage.enemy)
@@ -78,6 +101,7 @@ const techniques: Record<string, { theme: string; special?: boolean }> = {
   'ultra-instinct': { theme: 'instinct', special: true },
   kunai: { theme: 'blade' },
   'shadow-clones': { theme: 'clones' },
+  'nine-tails-chakra': { theme: 'baryon', special: true },
   rasengan: { theme: 'vortex', special: true },
   rasenshuriken: { theme: 'wind', special: true },
   'kurama-rasenshuriken': { theme: 'wind', special: true },

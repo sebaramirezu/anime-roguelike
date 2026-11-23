@@ -131,7 +131,7 @@ export function CombatScreen({ stage, hero, update, demo, error, onBack, onRepor
     {demo && <p className="stage-notice">DEMO visual. Conecta el motor para ver ataques automáticos, efectos y estadísticas.</p>}
     {error && <p className="stage-notice" role="alert">{error}</p>}
     {!demo && !error && !update && <p role="status">Esperando el estado del motor…</p>}
-    <CombatArena stage={stage} hero={hero.id} events={events} outcome={outcome}
+    <CombatArena stage={stage} hero={hero.id} heroForm={update?.player?.visualForm} events={events} outcome={outcome}
       leftHud={<FighterHud name={hero.name} state={update?.player} />}
       rightHud={<FighterHud name={stage.enemy.name} state={update?.enemy} />} />
     <LevelUpNotice report={update?.status === 'finished' ? update.report : undefined} />

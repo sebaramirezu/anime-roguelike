@@ -1,14 +1,16 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { CombatEvent, CombatReport } from '../../adapters/gameEngineAdapter'
+import type { HeroForm } from '../../data/heroForms'
 import type { CharacterId } from '../../data/items'
 import type { Stage } from '../../data/levels'
 import { AnimatedSprite } from './AnimatedSprite'
 import { arenaPlayback, enemyVisual, eventStyle, heroVisual, outcomeLabels } from './arenaVisuals'
 import './CombatArena.css'
 
-export function CombatArena({ stage, hero, events, outcome, leftHud, rightHud }: {
+export function CombatArena({ stage, hero, heroForm, events, outcome, leftHud, rightHud }: {
   stage: Stage
   hero: CharacterId
+  heroForm?: HeroForm
   events: readonly CombatEvent[]
   outcome?: CombatReport['outcome']
   leftHud: ReactNode
@@ -31,7 +33,7 @@ export function CombatArena({ stage, hero, events, outcome, leftHud, rightHud }:
     <div className="arena-heads">{leftHud}{rightHud}</div>
     <div className="arena-ground" aria-hidden="true" />
     <div className="arena-actor arena-player">
-      <AnimatedSprite visual={heroVisual(hero)} playback={arenaPlayback(events, 'player')} />
+      <AnimatedSprite visual={heroVisual(hero, heroForm)} playback={arenaPlayback(events, 'player')} />
     </div>
     <div className="arena-actor arena-enemy" data-enemy={stage.enemy.id}>
       <AnimatedSprite key={stage.enemy.id} visual={enemyVisual(stage)} playback={arenaPlayback(events, 'enemy')} facing="left" />
