@@ -1,0 +1,57 @@
+.menu-art .fighter {
+  width: min(44%, 260px);
+  height: 360px;
+  font-size: 0;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+}
+
+.menu-art .fighter-left { background-image: url('./assets/items/png/gokufase1.png'); }
+.menu-art .fighter-right { background-image: url('./assets/items/png/narutofase1.png'); }
+
+.character-card:nth-child(1) .portrait {
+  min-height: 180px;
+  font-size: 0;
+  background: center / contain no-repeat url('./assets/items/png/gokufase1.png');
+}
+
+.character-card:nth-child(2) .portrait {
+  min-height: 180px;
+  font-size: 0;
+  background: center / contain no-repeat url('./assets/items/png/narutofase1.png');
+}
+
+.mini-character {
+  background: center / contain no-repeat;
+}
+
+.mini-character.character-goku { background-image: url('./assets/items/png/gokufase1.png'); }
+.mini-character.character-naruto { background-image: url('./assets/items/png/narutofase1.png'); }
+.mini-character.character-goku,
+.mini-character.character-naruto { font-size: 0; }
+
+.character-phase-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.character-phase-gallery figure {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.character-phase-gallery img {
+  display: block;
+  width: 100%;
+  height: 52px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  background: #17132f;
+}
+
+.character-phase-gallery figcaption { margin-top: 3px; }

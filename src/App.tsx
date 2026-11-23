@@ -4,8 +4,10 @@ import { STAGE_WARNING } from './shared/gameConstants'
 import { Backpack } from './components/inventory/Backpack'
 import { ArsenalScreen, ShopScreen, StarterItemsScreen } from './screens/EquipmentScreens'
 import { buyOffer, refreshOffers, startEquipmentSession, type EquipmentSession } from './data/equipmentSession'
+import { characterVisuals } from './data/characterVisuals'
 import type { CharacterId, Item } from './data/items'
 import './Equipment.css'
+import './CharacterVisuals.css'
 
 type Screen = 'menu' | 'characters' | 'starter' | 'preparation' | 'shop' | 'arsenal' | 'credits'
 type Character = { id: CharacterId; name: string; anime: string; role: string; description: string; color: string; stats: { label: string; value: number }[] }
@@ -92,8 +94,14 @@ function Preparation({ character, session, onBack, onCredits, onShop }: {
     <div className="prep-layout">
       <div className="loadout-panel panel">
         <div className="panel-title"><span>OPERADOR ACTIVO</span><b>{character.name.toUpperCase()}</b></div>
-        <div className="mini-character" aria-hidden="true" style={{ '--character-color': character.color } as React.CSSProperties}>
+        <div className={`mini-character character-${character.id}`} aria-hidden="true" style={{ '--character-color': character.color } as React.CSSProperties}>
           {character.id === 'goku' ? '悟' : '忍'}
+        </div>
+        <div className="character-phase-gallery" aria-label={`Fases de ${character.name}`}>
+          {characterVisuals[character.id].phases.map((phase) => <figure key={phase.label}>
+            <img src={phase.imageSrc} alt={`${character.name}, ${phase.label}`} />
+            <figcaption>{phase.label}</figcaption>
+          </figure>)}
         </div>
         <div className="loadout-stats">
           {character.stats.map(({ label, value }) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}

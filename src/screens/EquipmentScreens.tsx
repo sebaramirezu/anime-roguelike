@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from 'react'
-import { ItemShape, Tray } from '../components/inventory/Backpack'
+import { ItemShape, ItemThumbnail, Tray } from '../components/inventory/Backpack'
 import { catalogFor, type CharacterId, type Item } from '../data/items'
 import { equipmentConfig, selectedSupply, supplyCost, validStarterSelection, type EquipmentSession } from '../data/equipmentSession'
 
 function ItemCard({ item, children }: { item: Item; children?: ReactNode }) {
   return <article className="equipment-card panel" data-tier={item.level}>
-    <header><span aria-hidden="true" className="equipment-icon">{item.icon}</span><div>
+    <header><span aria-hidden="true" className="equipment-icon"><ItemThumbnail item={item} /></span><div>
       <p className="equipment-tier">Nivel {item.level} · {item.rarity}</p>
       <h3>{item.name}</h3>
       <small>{item.category} · {item.universe}</small>

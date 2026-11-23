@@ -1,3 +1,5 @@
+import { itemImages } from './itemImages'
+
 export type CharacterId = 'goku' | 'naruto'
 export type Cell = readonly [column: number, row: number]
 type Category = 'Arma' | 'Potenciación' | 'Escudo' | 'Armadura' | 'Guantes' | 'Casco' | 'Consumible' | 'Apoyo'
@@ -24,6 +26,7 @@ export type Item = {
   description: string
   effects: readonly Effect[]
   icon: string
+  imageSrc?: string
 }
 
 const shapes = {
@@ -44,7 +47,7 @@ function item(
   shape: readonly Cell[], icon: string, description: string, effects: readonly Effect[],
 ): Item {
   return {
-    owner, id, name, level, category, shape, icon, description, effects,
+    owner, id, name, level, category, shape, icon, description, effects, imageSrc: itemImages[id],
     universe: universes[owner], rarity: rarity[level - 1], price: prices[level - 1],
   }
 }

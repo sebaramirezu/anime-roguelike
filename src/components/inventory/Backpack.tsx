@@ -19,6 +19,12 @@ export function ItemShape({ item }: { item: Item }) {
   </div>
 }
 
+export function ItemThumbnail({ item, className = '' }: { item: Item; className?: string }) {
+  return item.imageSrc
+    ? <img className={`item-thumbnail ${className}`.trim()} src={item.imageSrc} alt="" />
+    : <b className={`item-symbol ${className}`.trim()} aria-hidden="true">{item.icon}</b>
+}
+
 export function Tray({ entries, selected, onSelect }: {
   entries: readonly TrayEntry[]
   selected?: string
@@ -30,10 +36,10 @@ export function Tray({ entries, selected, onSelect }: {
     <ul>{entries.map(({ id, item }) => <li key={id}>
       {onSelect
         ? <button type="button" aria-pressed={id === selected} onClick={() => onSelect(id)}>
-            <span><b aria-hidden="true">{item.icon}</b> {item.name}</span><ItemShape item={item} />
+            <span className="tray-item-name"><ItemThumbnail item={item} />{item.name}</span><ItemShape item={item} />
           </button>
         : <div className="tray-entry">
-            <span><b aria-hidden="true">{item.icon}</b> {item.name}</span><ItemShape item={item} />
+            <span className="tray-item-name"><ItemThumbnail item={item} />{item.name}</span><ItemShape item={item} />
           </div>}
     </li>)}</ul>
   </section>
@@ -60,7 +66,9 @@ export function Backpack({ entries, capacity = 32 }: {
           disabled={blocked || !item}
           aria-label={`Fila ${row + 1}, columna ${column + 1}${blocked ? ', bloqueada' : ''}${preview.has(key) ? ', vista previa' : ''}`}
           onClick={() => setAnchor([column, row])}
-        />
+        >
+          {item && preview.has(key) && key === `${anchor[0]}-${anchor[1]}` && <ItemThumbnail item={item} className="inventory-preview-art" />}
+        </button>
       }))}
     </div>
     <p className="equipment-note">El motor de inventario está pendiente de conexión. Selecciona un objeto y pulsa una casilla para ver su forma. La vista previa no valida ni guarda posiciones.</p>
