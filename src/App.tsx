@@ -1,122 +1,35 @@
 import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
 import './App.css'
+import { STAGE_WARNING } from './shared/gameConstants'
+
+type Screen = 'menu' | 'characters' | 'preparation' | 'credits'
+type CharacterId = 'goku' | 'naruto'
+type Character = { id: CharacterId; name: string; anime: string; role: string; description: string; color: string; stats: { label: string; value: number }[] }
+
+const characters: Character[] = [
+  { id: 'goku', name: 'Goku', anime: 'Dragon Ball', role: 'Guerrero de energía', description: 'Un luchador incansable que convierte cada batalla en una nueva transformación.', color: '#f6a623', stats: [{ label: 'Fuerza', value: 92 }, { label: 'Ki', value: 88 }, { label: 'Defensa', value: 76 }] },
+  { id: 'naruto', name: 'Naruto', anime: 'Naruto', role: 'Ninja de chakra', description: 'Un ninja impredecible que domina clones, viento y una voluntad imposible de quebrar.', color: '#55b9ff', stats: [{ label: 'Fuerza', value: 84 }, { label: 'Chakra', value: 94 }, { label: 'Defensa', value: 80 }] },
+]
 
 function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  const [screen, setScreen] = useState<Screen>('menu')
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterId>('goku')
+  const character = characters.find(({ id }) => id === selectedCharacter) ?? characters[0]
+  return <main className="game-shell">
+    <header className="topbar"><button className="brand" onClick={() => setScreen('menu')} aria-label="Volver al menú principal"><span className="brand-mark">AR</span><span>ANIME <strong>ROGUELIKE</strong></span></button><div className="top-status"><span className="status-dot" /> EXPEDICIÓN 01 <span className="gold">◆</span> 120</div></header>
+    {screen === 'menu' && <Menu onNavigate={setScreen} />}
+    {screen === 'characters' && <CharacterSelect selected={selectedCharacter} onSelect={setSelectedCharacter} onContinue={() => setScreen('preparation')} onBack={() => setScreen('menu')} />}
+    {screen === 'preparation' && <Preparation character={character} onBack={() => setScreen('characters')} onCredits={() => setScreen('credits')} />}
+    {screen === 'credits' && <Credits onBack={() => setScreen('menu')} />}
+  </main>
 }
+
+function Menu({ onNavigate }: { onNavigate: (screen: Screen) => void }) { return <section className="menu-screen screen-padding"><div className="menu-art"><div className="sun-orb" /><div className="fighter fighter-left">悟</div><div className="fighter fighter-right">忍</div><div className="slash slash-one" /><div className="slash slash-two" /></div><div className="menu-copy"><p className="eyebrow">TEMPORADA 01 · EL DESPERTAR</p><h1>ANIME<br /><span>ROGUELIKE</span></h1><p className="tagline">Cada batalla cambia tu destino.</p><div className="menu-actions"><button className="primary-button" onClick={() => onNavigate('characters')}>JUGAR <span>→</span></button><button className="secondary-button" onClick={() => onNavigate('preparation')}>ARSENAL</button><button className="text-button" onClick={() => onNavigate('credits')}>CRÉDITOS</button></div></div><div className="protocol"><span>◈</span><div><small>PROTOCOLO</small><strong>23</strong></div><p>El destino favorece<br />a los preparados.</p></div></section> }
+
+function CharacterSelect({ selected, onSelect, onContinue, onBack }: { selected: CharacterId; onSelect: (id: CharacterId) => void; onContinue: () => void; onBack: () => void }) { return <section className="screen-padding inner-screen"><div className="section-heading"><button className="back-button" onClick={onBack}>← MENÚ</button><p className="eyebrow">PASO 01 / 03</p><h2>ELIGE TU <span>CAMPEÓN</span></h2><p>Dos caminos. Una expedición. Elige quién luchará por ti.</p></div><div className="character-grid">{characters.map((item) => <button key={item.id} className={`character-card ${selected === item.id ? 'selected' : ''}`} onClick={() => onSelect(item.id)} style={{ '--character-color': item.color } as React.CSSProperties}><div className="portrait">{item.id === 'goku' ? '悟' : '忍'}</div><div className="character-info"><p className="eyebrow">{item.anime}</p><h3>{item.name}</h3><strong>{item.role}</strong><p>{item.description}</p>{item.stats.map((stat) => <div className="stat" key={stat.label}><span>{stat.label}</span><div><i style={{ width: `${stat.value}%` }} /></div><b>{stat.value}</b></div>)}</div><span className="select-indicator">{selected === item.id ? '✓ SELECCIONADO' : 'SELECCIONAR'}</span></button>)}</div><div className="bottom-action"><span>Tu elección define el arsenal inicial.</span><button className="primary-button" onClick={onContinue}>CONTINUAR →</button></div></section> }
+
+function Preparation({ character, onBack, onCredits }: { character: Character; onBack: () => void; onCredits: () => void }) { const cells = Array.from({ length: 36 }, (_, index) => index); return <section className="screen-padding inner-screen"><div className="section-heading compact"><button className="back-button" onClick={onBack}>← CAMPEONES</button><p className="eyebrow">PREPARACIÓN · NIVEL 01</p><h2>PREPARA TU <span>EXPEDICIÓN</span></h2><p>Organiza tu mochila antes de que comience la primera etapa.</p></div><div className="prep-layout"><div className="loadout-panel panel"><div className="panel-title"><span>OPERADOR ACTIVO</span><b>{character.name.toUpperCase()}</b></div><div className="mini-character" style={{ '--character-color': character.color } as React.CSSProperties}>{character.id === 'goku' ? '悟' : '忍'}</div><div className="loadout-stats">{character.stats.map((stat) => <div key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong></div>)}</div><button className="secondary-button" onClick={onCredits}>VER CRÉDITOS</button></div><div className="inventory-panel panel"><div className="panel-title"><span>MOCHILA ESPACIAL</span><b>32 / 32 CASILLAS</b></div><div className="inventory-grid">{cells.map((cell) => <div className={`inventory-cell ${cell % 6 === 0 || cell % 6 === 5 ? (cell < 6 || cell > 29 ? 'locked' : '') : ''}`} key={cell}>{cell === 8 && <span className="item-icon blue">✦</span>}{cell === 15 && <span className="item-icon orange">◈</span>}</div>)}</div><div className="inventory-legend"><span><i className="legend-dot blue-dot" /> Energía</span><span><i className="legend-dot orange-dot" /> Arsenal</span><span>◈ Selecciona para equipar</span></div></div></div><div className="stage-notice"><span>⚠</span><p><strong>AVISO DE ETAPA</strong>{STAGE_WARNING}</p></div><div className="bottom-action"><span>Nivel 01 <b>›</b> Etapa 01 / 12</span><button className="primary-button" onClick={() => window.alert(STAGE_WARNING)}>INICIAR ETAPA →</button></div></section> }
+
+function Credits({ onBack }: { onBack: () => void }) { return <section className="screen-padding credits-screen"><button className="back-button" onClick={onBack}>← MENÚ</button><div className="credits-card"><p className="eyebrow">REGISTRO DE EXPEDICIÓN</p><h2>ANIME <span>ROGUELIKE</span></h2><div className="codex-placeholder"><span>CODEX</span><small>ESPACIO RESERVADO PARA EL LOGO OFICIAL</small></div><p>Una experiencia roguelike autobattler de inventario espacial.</p><div className="credits-meta"><span>REACT · TYPESCRIPT · VITE</span><span>CREADO PARA EL HACKATHON</span><span>ASISTENCIA DE CODEX</span></div><p className="credits-note">El recurso oficial del logo Codex será incorporado cuando esté disponible.</p></div></section> }
 
 export default App
