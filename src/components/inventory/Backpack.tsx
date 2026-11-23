@@ -115,6 +115,9 @@ export function Backpack({ inventory, onCommand }: {
       <button className="secondary-button" disabled={locked} onClick={() =>
         send({ kind: 'rotate', instanceId: entry.id }, 'Rotación guardada.')
       }>ROTAR 90°</button>
+      {selectedPlacement && <button className="secondary-button" disabled={locked} onClick={() =>
+        send({ kind: 'remove', instanceId: entry.id }, 'Objeto devuelto a la bandeja.', true)
+      }>RETIRAR</button>}
       <button className="secondary-button" onClick={() => select()}>CANCELAR SELECCIÓN</button>
     </div>}
     {message && <p role={message.error ? 'alert' : 'status'}>{message.text}</p>}

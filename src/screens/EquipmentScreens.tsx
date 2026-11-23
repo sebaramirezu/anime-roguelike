@@ -3,9 +3,16 @@ import { ItemShape, Tray } from '../components/inventory/Backpack'
 import { catalogFor, type CharacterId, type Item } from '../data/items'
 import { equipmentConfig, selectedSupply, supplyCost, validStarterSelection, type EquipmentSession } from '../data/equipmentSession'
 
+function ItemIcon({ item }: { item: Item }) {
+  const [failed, setFailed] = useState(false)
+  return <span aria-hidden="true" className="equipment-icon">
+    {item.iconPng && !failed ? <img src={item.iconPng} alt="" onError={() => setFailed(true)} /> : item.icon}
+  </span>
+}
+
 function ItemCard({ item, children }: { item: Item; children?: ReactNode }) {
   return <article className="equipment-card panel" data-tier={item.level}>
-    <header><span aria-hidden="true" className="equipment-icon">{item.icon}</span><div>
+    <header><ItemIcon item={item} /><div>
       <p className="equipment-tier">Nivel {item.level} · {item.rarity}</p>
       <h3>{item.name}</h3>
       <small>{item.category} · {item.universe}</small>
@@ -17,7 +24,7 @@ function ItemCard({ item, children }: { item: Item; children?: ReactNode }) {
         case 'weaponCooldownReduction': return <li key={effect.kind}>
           Reduce {effect.percent}% el tiempo de reutilización de armas{effect.seconds ? ` durante ${effect.seconds} segundos` : ''}.
         </li>
-        case 'statBonus': return <li key={effect.kind}>+{effect.amount} de {effect.stat}.</li>
+        case 'statBonus': return <li key={effect.kind}>+{effect.amount} de {effect.stat === 'defensa' ? 'armadura' : effect.stat}.</li>
         case 'technique': return <li key={effect.kind}>{effect.description}</li>
       }
     })}</ul>

@@ -1,3 +1,5 @@
+import type { ActiveEffect, GameEffect } from '../effects/types'
+
 export type CombatStatus = 'running' | 'victory' | 'defeat' | 'timeout'
 
 export interface WeaponDefinition {
@@ -11,6 +13,10 @@ export interface WeaponDefinition {
 export interface CombatantDefinition {
   id: string
   maxHealth: number
+  initialHealth?: number
+  armor?: number
+  maxShield?: number
+  supports?: readonly CombatSupport[]
   weapons: readonly WeaponDefinition[]
 }
 
@@ -18,12 +24,34 @@ export interface CombatantState {
   id: string
   maxHealth: number
   health: number
+  armor: number
+  maxShield: number
+  shield: number
+  activeEffects: readonly ActiveEffect[]
+  supports: readonly CombatSupport[]
   weapons: WeaponState[]
 }
 
 export interface WeaponState extends WeaponDefinition {
   remainingCooldownMs: number
 }
+
+export type ResolvedAttack = {
+  source: 'player' | 'enemy'
+  weaponId: string
+  damage: number
+  absorbed?: number
+  lethal: boolean
+}
+
+export type CombatSupport = {
+  id: string
+  name: string
+  threshold: number
+  effects: readonly GameEffect[]
+}
+
+export type ResolvedSupport = { target: 'player' | 'enemy'; name: string; healed: number; buff: boolean }
 
 export interface CombatState {
   player: CombatantState

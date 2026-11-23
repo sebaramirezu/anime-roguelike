@@ -1,11 +1,13 @@
-export { advanceCombat, createCombat, getCombatResult } from './combat/combat'
+export { advanceCombat, createCombat, getCombatResult, mitigateDamage } from './combat/combat'
 export type {
   CombatantDefinition,
   CombatantState,
+  CombatSupport,
   CombatResult,
   CombatState,
   CombatStatus,
   CreateCombatOptions,
+  ResolvedAttack,
   WeaponDefinition,
   WeaponState,
 } from './combat/types'
@@ -44,6 +46,8 @@ export { advanceEffects, applyEffects } from './effects/effects'
 export type { ActiveEffect, EffectTarget, GameEffect } from './effects/types'
 export { calculateSynergies } from './effects/synergies'
 export type { SynergyBonus, SynergyItem, SynergyRule } from './effects/synergies'
+export { awardHeroVictory, createHeroProgress, heroBaseStats, rpgBalance, xpForNextLevel } from './progression/hero'
+export type { HeroProgress } from './progression/hero'
 export { canFuse, fuseItems, findFusionResult, resolveFusion } from './fusion/fusion'
 export type { FusionItemDefinition, FusionRecipe, FusionRequest } from './fusion/fusion'
 export {

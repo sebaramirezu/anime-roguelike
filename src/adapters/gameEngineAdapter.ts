@@ -1,10 +1,10 @@
 import type { CharacterId } from '../data/items'
 import type { Stage } from '../data/levels'
-import type { InventoryState } from '../engine'
+import type { HeroProgress, InventoryState } from '../engine'
 
 export type Stats = {
   damage?: number
-  defense?: number
+  armor?: number
   critPercent?: number
   lifestealPercent?: number
   thorns?: number
@@ -16,6 +16,8 @@ export type Combatant = {
   maxHealth?: number
   shield?: number
   maxShield?: number
+  progression?: { level: number; xp: number; xpNeeded: number }
+  bonuses?: { maxHealth: number; armor: number; maxShield: number }
   stats?: Stats
   effects?: readonly { id: string; name: string; kind: 'buff' | 'debuff'; remainingSeconds?: number; description?: string }[]
   weapons?: readonly { id: string; name: string; remainingSeconds: number; totalSeconds: number }[]
@@ -24,8 +26,11 @@ export type Combatant = {
 export type CombatEvent = {
   id: string
   text: string
-  kind: 'attack' | 'damage' | 'heal' | 'shield' | 'effect'
+  kind: 'attack' | 'damage' | 'heal' | 'shield' | 'effect' | 'transform' | 'death'
   target: 'player' | 'enemy'
+  source?: 'player' | 'enemy'
+  techniqueId?: string
+  visual?: { theme: string; special?: boolean }
   amount?: number
 }
 
@@ -38,6 +43,7 @@ export type CombatReport = {
   healing?: number
   lifestealHealing?: number
   shieldBlocked?: number
+  shieldDamageDealt?: number
   thornsDamage?: number
   attacks?: number
   criticals?: number
@@ -45,6 +51,10 @@ export type CombatReport = {
   debuffs?: readonly string[]
   durationSeconds?: number
   gold?: number
+  xpGained?: number
+  levelsGained?: number
+  healthIncrease?: number
+  damageIncrease?: number
   enemyWeakness?: string
 }
 
@@ -58,6 +68,7 @@ export type CombatRequest = {
   character: CharacterId
   stage: Stage
   inventory: InventoryState
+  hero?: HeroProgress
 }
 
 export interface GameEngineAdapter {

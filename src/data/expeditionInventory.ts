@@ -1,6 +1,6 @@
 import {
   canPlaceItem, findFusionResult, findSharedEdge, getInventoryCapacity, getInventoryMask, getOccupiedCells, moveItem, resolveFusion,
-  placeItem, rotateItem, rotateShape, withCompletedLevels,
+  placeItem, removeItem, rotateItem, rotateShape, withCompletedLevels,
   type InventoryState, type Rotation,
 } from '../engine'
 import { fusionRecipes } from './fusionRecipes'
@@ -12,6 +12,7 @@ export type ExpeditionInventory = { bag: InventoryState; tray: readonly Unplaced
 export type InventoryCommand =
   | { kind: 'place' | 'move'; instanceId: string; anchor: Cell }
   | { kind: 'rotate'; instanceId: string }
+  | { kind: 'remove'; instanceId: string }
 
 const byId = new Map(items.map((item) => [item.id, item]))
 
@@ -86,6 +87,15 @@ export function editInventory(inventory: ExpeditionInventory, command: Inventory
   if (bag.combatActive) return { ok: false, error: 'La mochila está bloqueada durante el combate.' }
   try {
     switch (command.kind) {
+      case 'remove': {
+        const instance = bag.items.find(({ instanceId }) => instanceId === command.instanceId)
+        const item = instance && byId.get(instance.itemId)
+        if (!instance || !item) return { ok: false, error: 'El objeto ya no está equipado.' }
+        return { ok: true, inventory: {
+          bag: removeItem(bag, instance.instanceId),
+          tray: [...tray, { id: instance.instanceId, item, rotation: instance.rotation }],
+        } }
+      }
       case 'place': {
         const entry = tray.find(({ id }) => id === command.instanceId)
         if (!entry) return { ok: false, error: 'El objeto ya no está en la bandeja.' }

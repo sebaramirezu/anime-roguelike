@@ -25,13 +25,17 @@ export function applyEffects(target: EffectTarget, effects: readonly GameEffect[
       }
       activeEffects.push({
         kind: 'cooldownReduction',
-        cooldownRateMultiplier: 1 + effect.percent / 100,
+        cooldownRateMultiplier: effect.mode === 'duration' ? 1 / (1 - Math.min(effect.percent, 90) / 100) : 1 + effect.percent / 100,
         remainingMs: effect.durationMs,
       })
     }
   }
 
   return { target: { ...target, health, activeEffects }, healed }
+}
+
+export function cooldownRate(effects: readonly ActiveEffect[]): number {
+  return effects.reduce((rate, effect) => rate * effect.cooldownRateMultiplier, 1)
 }
 
 /** Advances temporary effects and weapon cooldowns without browser timers. */

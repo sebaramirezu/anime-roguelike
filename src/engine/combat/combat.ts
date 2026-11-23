@@ -4,8 +4,11 @@ import type {
   CombatResult,
   CombatState,
   CreateCombatOptions,
+  ResolvedAttack,
+  ResolvedSupport,
   WeaponState,
 } from './types'
+import { advanceEffects, applyEffects, cooldownRate } from '../effects/effects'
 
 const DEFAULT_MAX_DURATION_MS = 120_000
 
@@ -13,6 +16,9 @@ function validateCombatant(combatant: CombatantDefinition, label: string): void 
   if (!combatant.id) throw new Error(`${label} must have an id.`)
   if (!Number.isFinite(combatant.maxHealth) || combatant.maxHealth <= 0) {
     throw new Error(`${label} maxHealth must be a positive finite number.`)
+  }
+  for (const value of [combatant.armor ?? 0, combatant.maxShield ?? 0, combatant.initialHealth ?? combatant.maxHealth]) {
+    if (!Number.isFinite(value) || value < 0) throw new Error(`${label} defensive stats must be non-negative and finite.`)
   }
 
   const weaponIds = new Set<string>()
@@ -33,12 +39,21 @@ function createCombatant(definition: CombatantDefinition): CombatantState {
   return {
     id: definition.id,
     maxHealth: definition.maxHealth,
-    health: definition.maxHealth,
+    health: Math.min(definition.maxHealth, definition.initialHealth ?? definition.maxHealth),
+    armor: definition.armor ?? 0,
+    maxShield: definition.maxShield ?? 0,
+    shield: definition.maxShield ?? 0,
+    activeEffects: [],
+    supports: definition.supports ?? [],
     weapons: definition.weapons.map((weapon): WeaponState => ({
       ...weapon,
       remainingCooldownMs: 0,
     })),
   }
+}
+
+export function mitigateDamage(damage: number, armor: number): number {
+  return Math.max(0, damage) * (100 / (100 + Math.max(0, armor)))
 }
 
 function resolveStatus(state: CombatState): CombatState {
@@ -74,15 +89,26 @@ export function createCombat(options: CreateCombatOptions): CombatState {
 function attackReadyWeapons(
   attacker: CombatantState,
   target: CombatantState,
+  source: ResolvedAttack['source'],
+  onAttack?: (attack: ResolvedAttack) => void,
 ): { attacker: CombatantState; target: CombatantState } {
   let updatedTarget = target
   const updatedWeapons = attacker.weapons.map((weapon) => {
     if (weapon.remainingCooldownMs > 1e-9) return weapon
 
+    const previousHealth = updatedTarget.health
+    const mitigated = mitigateDamage(weapon.damage, updatedTarget.armor)
+    const absorbed = Math.min(updatedTarget.shield, mitigated)
     updatedTarget = {
       ...updatedTarget,
-      health: Math.max(0, updatedTarget.health - weapon.damage),
+      shield: updatedTarget.shield - absorbed,
+      health: Math.max(0, updatedTarget.health - (mitigated - absorbed)),
     }
+    onAttack?.({
+      source, weaponId: weapon.id, damage: previousHealth - updatedTarget.health,
+      ...(absorbed > 0 ? { absorbed } : {}),
+      lethal: previousHealth > 0 && updatedTarget.health === 0,
+    })
     return { ...weapon, remainingCooldownMs: weapon.cooldownMs }
   })
 
@@ -92,11 +118,25 @@ function attackReadyWeapons(
   }
 }
 
+function triggerSupport(state: CombatantState, target: ResolvedSupport['target'], notify?: (event: ResolvedSupport) => void) {
+  if (state.health <= 0 || state.activeEffects.length) return state
+  const support = state.supports.find(({ threshold }) => state.health <= state.maxHealth * threshold)
+  if (!support) return state
+  const applied = applyEffects({ ...state, weaponCooldownsMs: [] }, support.effects)
+  const buff = applied.target.activeEffects.length > state.activeEffects.length
+  notify?.({ target, name: support.name, healed: applied.healed, buff })
+  return {
+    ...state, health: applied.target.health, activeEffects: applied.target.activeEffects,
+    supports: state.supports.filter(({ id }) => id !== support.id),
+  }
+}
+
 /**
  * Advance a combat by a deterministic duration. The returned state is a new value;
  * the input state is never mutated. At equal timestamps, the player attacks first.
  */
-export function advanceCombat(state: CombatState, deltaMs: number): CombatState {
+export function advanceCombat(state: CombatState, deltaMs: number, onAttack?: (attack: ResolvedAttack) => void,
+  onSupport?: (support: ResolvedSupport) => void): CombatState {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) {
     throw new Error('deltaMs must be a non-negative finite number.')
   }
@@ -106,11 +146,15 @@ export function advanceCombat(state: CombatState, deltaMs: number): CombatState 
   let remainingMs = Math.min(deltaMs, Math.max(0, current.maxDurationMs - current.elapsedMs))
 
   while (current.status === 'running') {
+    current = { ...current,
+      player: triggerSupport(current.player, 'player', onSupport),
+      enemy: triggerSupport(current.enemy, 'enemy', onSupport),
+    }
     const ready = current.player.weapons.some((weapon) => weapon.remainingCooldownMs <= 1e-9)
       || current.enemy.weapons.some((weapon) => weapon.remainingCooldownMs <= 1e-9)
 
     if (ready) {
-      const playerAttack = attackReadyWeapons(current.player, current.enemy)
+      const playerAttack = attackReadyWeapons(current.player, current.enemy, 'player', onAttack)
       if (playerAttack.target.health <= 0) {
         current = resolveStatus({
           ...current,
@@ -119,7 +163,7 @@ export function advanceCombat(state: CombatState, deltaMs: number): CombatState 
         })
         break
       }
-      const enemyAttack = attackReadyWeapons(playerAttack.target, playerAttack.attacker)
+      const enemyAttack = attackReadyWeapons(playerAttack.target, playerAttack.attacker, 'enemy', onAttack)
       current = resolveStatus({
         ...current,
         player: enemyAttack.target,
@@ -132,20 +176,22 @@ export function advanceCombat(state: CombatState, deltaMs: number): CombatState 
     if (remainingMs <= 1e-9) break
 
     const nextAttackMs = Math.min(
-      ...current.player.weapons.map((weapon) => weapon.remainingCooldownMs),
-      ...current.enemy.weapons.map((weapon) => weapon.remainingCooldownMs),
+      ...[current.player, current.enemy].flatMap(({ weapons, activeEffects }) => [
+        ...weapons.map((weapon) => weapon.remainingCooldownMs / cooldownRate(activeEffects)),
+        ...activeEffects.map(({ remainingMs }) => remainingMs),
+      ]),
       remainingMs,
     )
     const stepMs = Math.min(nextAttackMs, remainingMs)
     if (!Number.isFinite(stepMs) || stepMs <= 0) break
 
-    const reduceCooldowns = (combatant: CombatantState): CombatantState => ({
-      ...combatant,
-      weapons: combatant.weapons.map((weapon) => ({
-        ...weapon,
-        remainingCooldownMs: Math.max(0, weapon.remainingCooldownMs - stepMs),
-      })),
-    })
+    const reduceCooldowns = (combatant: CombatantState): CombatantState => {
+      const progress = advanceEffects({ ...combatant, weaponCooldownsMs: combatant.weapons.map((weapon) => weapon.remainingCooldownMs) }, stepMs)
+      return {
+        ...combatant, activeEffects: progress.activeEffects,
+        weapons: combatant.weapons.map((weapon, index) => ({ ...weapon, remainingCooldownMs: progress.weaponCooldownsMs[index] })),
+      }
+    }
 
     current = {
       ...current,

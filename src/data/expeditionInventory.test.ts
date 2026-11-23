@@ -6,7 +6,7 @@ import { advanceEquipment, buyOffer, startEquipmentSession, type EquipmentSessio
 import { editInventory, inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand } from './expeditionInventory'
 import { expeditionSaveKey, loadExpedition, restoreExpedition, saveExpedition, serializeExpedition } from './expeditionSave'
 import { items, type Cell } from './items'
-import { stages } from './levels'
+import { stagesFor } from './levels'
 
 function getItem(id: string) {
   const item = items.find((entry) => entry.id === id)
@@ -185,7 +185,7 @@ describe('expedition backpack regression', () => {
     const lockedSession = { ...started, inventory: locked }
     expect(buyOffer(lockedSession, started.offers[0].id)).toBe(lockedSession)
     const updates: CombatUpdate[] = []
-    liveCombat.startCombat({ character: 'naruto', stage: stages[0], inventory: locked.bag },
+    liveCombat.startCombat({ character: 'naruto', stage: stagesFor('naruto')[0], inventory: locked.bag },
       (update) => updates.push(update), new AbortController().signal)
     vi.runAllTimers()
     expect(updates.at(-1)).toMatchObject({ status: 'finished', report: { outcome: 'victory' } })

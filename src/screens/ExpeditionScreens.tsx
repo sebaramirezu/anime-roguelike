@@ -1,17 +1,19 @@
-import type { CSSProperties } from 'react'
-import type { Combatant, CombatEvent, CombatReport, CombatUpdate, Stats } from '../adapters/gameEngineAdapter'
-import { enemyLabels, levels, type Stage } from '../data/levels'
+import type { Combatant, CombatReport, CombatUpdate, Stats } from '../adapters/gameEngineAdapter'
+import { CombatArena } from '../components/combat/CombatArena'
+import { outcomeLabels } from '../components/combat/arenaVisuals'
+import type { CharacterId } from '../data/items'
+import { enemyLabels, levelsFor, type Stage } from '../data/levels'
 import { STAGE_WARNING } from '../shared/gameConstants'
 
 const unavailable = 'No disponible'
-const value = (number?: number, unit = '') => number === undefined ? unavailable : `${number}${unit}`
+const value = (number?: number, unit = '') => number === undefined ? unavailable : `${Number(number.toFixed(1))}${unit}`
 const list = (entries?: readonly string[]) => entries ? entries.join(' · ') || 'Ninguno' : unavailable
 const health = (current?: number, maximum?: number) => `${value(current)} / ${value(maximum)}`
 
 export function CombatStats({ stats }: { stats?: Stats }) {
   return <dl className="combat-stats">
-    <dt>Daño</dt><dd>{value(stats?.damage)}</dd>
-    <dt>Defensa</dt><dd>{value(stats?.defense)}</dd>
+    <dt>Daño de armas</dt><dd>{value(stats?.damage)}</dd>
+    <dt>Armadura</dt><dd>{value(stats?.armor)}</dd>
     <dt>Crítico</dt><dd>{value(stats?.critPercent, '%')}</dd>
     <dt>Vampirismo</dt><dd>{value(stats?.lifestealPercent, '%')}</dd>
     <dt>Espinas</dt><dd>{value(stats?.thorns)}</dd>
@@ -31,7 +33,7 @@ export function StageMap({ current, demo, onBack, onPreview }: {
       <h2>MAPA DE <span>EXPEDICIÓN</span></h2>
       {demo && <p>DEMO · Explora las 46 etapas. Las visitas al mapa no modifican tu partida.</p>}
     </div>
-    <div className="expedition-map">{levels.map(({ level, name, special, stages, plannedWeakness }) => (
+    <div className="expedition-map">{levelsFor(current.character).map(({ level, name, special, stages }) => (
       <section className="panel" key={level}>
         <p className="eyebrow">NIVEL {level} · {special ? 'ESPECIAL' : 'NORMAL'}</p>
         <h3>{name}</h3>
@@ -42,7 +44,6 @@ export function StageMap({ current, demo, onBack, onPreview }: {
             {stage.number} · {stage.enemy.name} <small>{enemyLabels[stage.enemy.kind]}</small>
           </span>}
         </li>)}</ul>
-        {demo && <p className="equipment-note">Debilidad prevista del jefe mayor: {plannedWeakness}</p>}
       </section>
     ))}</div>
   </section>
@@ -77,44 +78,51 @@ function Meter({ label, current, maximum, shield = false }: { label: string; cur
   </div>
 }
 
-function Fighter({ name, mark, color, state, event }: {
-  name: string; mark: string; color: string; state?: Combatant; event?: CombatEvent
-}) {
-  return <article className="panel combat-fighter" style={{ '--fighter-color': color } as CSSProperties}>
-    <div className="combat-portrait">
-      <span aria-hidden="true">{mark}</span>
-      {event && <span key={event.id} className={`combat-impact impact-${event.kind}`} aria-hidden="true">
-        {event.amount === undefined ? '✦' : event.kind === 'heal' ? `+${event.amount}` : event.amount}
-      </span>}
-    </div>
+function FighterHud({ name, state }: { name: string; state?: Combatant }) {
+  return <div className="arena-hud">
     <h3>{name}</h3>
+    {state?.progression && <p className="arena-progression">Nivel {state.progression.level} · XP {state.progression.xp} / {state.progression.xpNeeded}</p>}
     <Meter label="Vida" current={state?.health} maximum={state?.maxHealth} />
     <Meter label="Escudo" current={state?.shield} maximum={state?.maxShield} shield />
-    <CombatStats stats={state?.stats} />
-    <h4>Efectos activos</h4>
+    {state?.stats?.armor !== undefined && <small>Armadura {value(state.stats.armor)}</small>}
     {state?.effects?.length ? <ul className="combat-effects">{state.effects.map((effect) => <li key={effect.id}>
       <strong>{effect.name}</strong> · {effect.kind === 'buff' ? 'Mejora' : 'Penalización'} · {value(effect.remainingSeconds, ' s')}
       {effect.description && <small>{effect.description}</small>}
-    </li>)}</ul> : <p>{state?.effects ? 'Ninguno' : unavailable}</p>}
+    </li>)}</ul> : null}
+  </div>
+}
+
+function LevelUpNotice({ report }: { report?: CombatReport | null }) {
+  if (!report?.levelsGained) return null
+  return <p className="stage-notice rpg-level-up" role="status">
+    Subiste {report.levelsGained} {report.levelsGained === 1 ? 'nivel' : 'niveles'} · +{report.healthIncrease} de vida máxima · +{value(report.damageIncrease)} puntos porcentuales de daño base
+  </p>
+}
+
+function FighterDetails({ name, state }: { name: string; state?: Combatant }) {
+  return <details className="panel combat-fighter">
+    <summary>{name} · Estadísticas y armas</summary>
+    <CombatStats stats={state?.stats} />
     <h4>Cooldowns de armas</h4>
     {state?.weapons?.length ? state.weapons.map((weapon) =>
       <Meter key={weapon.id} label={weapon.name + ' (s)'} current={weapon.remainingSeconds} maximum={weapon.totalSeconds} />
     ) : <p>{state?.weapons ? 'Sin armas' : unavailable}</p>}
-  </article>
+  </details>
 }
 
-export function CombatScreen({ stage, hero, update, demo, error, onBack, onDemoReport }: {
+export function CombatScreen({ stage, hero, update, demo, error, onBack, onReport }: {
   stage: Stage
-  hero: { name: string; mark: string; color: string }
+  hero: { id: CharacterId; name: string }
   update: CombatUpdate | null
   demo: boolean
   error: string | null
   onBack: () => void
-  onDemoReport: () => void
+  onReport: () => void
 }) {
-  const events = update?.recentEvents?.slice(-8)
-  const latest = events?.at(-1)
-  return <section className="screen-padding inner-screen">
+  const events = update?.recentEvents ?? []
+  const log = events.filter((event) => event.kind !== 'attack').slice(-8)
+  const outcome = update?.status === 'finished' ? update.report.outcome : undefined
+  return <section className="screen-padding inner-screen arena-screen">
     <div className="section-heading">
       <p className="eyebrow">{demo && 'DEMO · '}NIVEL {stage.level} · ETAPA {stage.number} / {stage.total}</p>
       <h2>{stage.region}</h2>
@@ -123,18 +131,23 @@ export function CombatScreen({ stage, hero, update, demo, error, onBack, onDemoR
     {demo && <p className="stage-notice">DEMO visual. Conecta el motor para ver ataques automáticos, efectos y estadísticas.</p>}
     {error && <p className="stage-notice" role="alert">{error}</p>}
     {!demo && !error && !update && <p role="status">Esperando el estado del motor…</p>}
+    <CombatArena stage={stage} hero={hero.id} events={events} outcome={outcome}
+      leftHud={<FighterHud name={hero.name} state={update?.player} />}
+      rightHud={<FighterHud name={stage.enemy.name} state={update?.enemy} />} />
+    <LevelUpNotice report={update?.status === 'finished' ? update.report : undefined} />
+    {outcome && <div className="arena-actions"><button className="primary-button" onClick={onReport}>VER INFORME →</button></div>}
     <div className="combat-arena">
-      <Fighter {...hero} state={update?.player} event={latest?.target === 'player' ? latest : undefined} />
-      <Fighter {...stage.enemy} state={update?.enemy} event={latest?.target === 'enemy' ? latest : undefined} />
+      <FighterDetails name={hero.name} state={update?.player} />
+      <FighterDetails name={stage.enemy.name} state={update?.enemy} />
     </div>
     <section className="panel combat-log">
       <h3>Acciones recientes</h3>
-      {events?.length ? <ol>{events.map((event) => <li key={event.id}>{event.text}</li>)}</ol>
-        : <p>{events ? 'Sin acciones registradas' : unavailable}</p>}
+      {log.length ? <ol>{log.map((event) => <li key={event.id}>{event.text}</li>)}</ol>
+        : <p>{update ? 'Sin acciones registradas' : unavailable}</p>}
     </section>
     {(demo || error) && <div className="bottom-action">
       <button className="secondary-button" onClick={onBack}>VOLVER A PREPARACIÓN</button>
-      {demo && <button className="primary-button" onClick={onDemoReport}>VER INFORME DEMO</button>}
+      {demo && <button className="primary-button" onClick={onReport}>VER INFORME DEMO</button>}
     </div>}
   </section>
 }
@@ -152,6 +165,7 @@ export function ResultScreen({ stage, report, onContinue, onMap }: {
     ['Curación total', value(report?.healing)],
     ['Curación por vampirismo', value(report?.lifestealHealing)],
     ['Daño bloqueado por escudos', value(report?.shieldBlocked)],
+    ['Daño al escudo enemigo', value(report?.shieldDamageDealt)],
     ['Daño reflejado por espinas', value(report?.thornsDamage)],
     ['Ataques', value(report?.attacks)],
     ['Críticos', value(report?.criticals)],
@@ -159,9 +173,9 @@ export function ResultScreen({ stage, report, onContinue, onMap }: {
     ['Penalizaciones aplicadas (debuffs)', list(report?.debuffs)],
     ['Duración', value(report?.durationSeconds, ' s')],
     ['Oro obtenido', value(report?.gold)],
+    ['Experiencia obtenida', value(report?.xpGained, ' XP')],
   ]
-  const titles = { victory: 'Victoria', defeat: 'Derrota', timeout: 'Tiempo agotado' }
-  const title = report ? titles[report.outcome] : 'Informe de combate'
+  const title = report ? outcomeLabels[report.outcome] : 'Informe de combate'
   const action = !report || report.outcome === 'timeout' ? 'VOLVER A PREPARACIÓN'
     : report.outcome === 'defeat' ? 'REINICIAR EXPEDICIÓN'
     : stage.level === 5 && stage.number === stage.total ? 'FINALIZAR EXPEDICIÓN' : 'CONTINUAR'
@@ -171,14 +185,13 @@ export function ResultScreen({ stage, report, onContinue, onMap }: {
       <h2>{title}</h2>
       <p>{stage.enemy.name}{!report && ' · Sin resultado del motor'}</p>
     </div>
+    <LevelUpNotice report={report} />
     <section className="panel">
       <dl className="combat-stats report-stats">
         {rows.map(([label, metric]) => <div key={label}><dt>{label}</dt><dd>{metric}</dd></div>)}
       </dl>
       {report?.outcome === 'defeat' && stage.enemy.kind !== 'normal' &&
-        <p className="stage-notice">{report.enemyWeakness
-          ? `Debilidad del jefe: ${report.enemyWeakness}`
-          : stage.enemy.weakness ? `Debilidad prevista del jefe: ${stage.enemy.weakness}` : `Debilidad del jefe: ${unavailable}`}</p>}
+        <p className="stage-notice">Debilidad del jefe: {report.enemyWeakness ?? unavailable}</p>}
     </section>
     <div className="bottom-action">
       {!report && <button className="secondary-button" onClick={onMap}>VER MAPA</button>}

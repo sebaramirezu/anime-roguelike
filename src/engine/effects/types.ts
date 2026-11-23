@@ -1,6 +1,6 @@
 export type GameEffect =
   | { kind: 'heal'; maxHealthPercent: number }
-  | { kind: 'cooldownReduction'; percent: number; durationMs: number }
+  | { kind: 'cooldownReduction'; percent: number; durationMs: number; mode?: 'duration' }
   | { kind: 'statBonus'; stat: 'maxHealth' | 'defense' | 'shield'; amount: number }
 
 export interface EffectTarget {
