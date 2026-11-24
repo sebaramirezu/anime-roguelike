@@ -88,8 +88,6 @@
 .report-stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
 .report-stats div { border: 1px solid var(--line); padding: 10px; }
 .report-stats dd { text-align: start; color: var(--gold); }
-.inventory-cell.occupied { color: var(--gold); border-color: #987547; }
-
 @media (max-width: 600px) {
   .combat-fighter { padding: 10px; }
   .combat-stats:not(.report-stats) { grid-template-columns: minmax(0, 1fr); }

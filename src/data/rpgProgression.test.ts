@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceCombat, awardHeroVictory, createCombat, createHeroProgress, createInventory, getInventoryCells,
+import { advanceCombat, awardHeroVictory, createCombat, createHeroProgress, createInventory, getInventoryCells, placeItem,
   mitigateDamage, rpgBalance, xpForNextLevel, type HeroProgress, type InventoryState } from '../engine'
 import { enemyLoadout, playerLoadout, victoryGold } from './combatLoadout'
 import { advanceEquipment, buyOffer, equipmentConfig, offersFor, recordVictory, recoverAfterVictory, refreshOffers, startEquipmentSession, updateEquippedInventory, type EquipmentSession } from './equipmentSession'
@@ -48,7 +48,9 @@ describe('health and defensive equipment', () => {
     ['naruto', ['vitality-seal', 'chunin-vest', 'chakra-barrier'], [200, 26, 280]],
   ] as const)('applies the three equipped defensive bonuses for %s', (character, ids, amounts) => {
     const hero = createHeroProgress(character)
-    const loadout = playerLoadout(character, hero, equip([...ids]))
+    const anchors: readonly Cell[] = [[1, 0], [1, 2], [3, 3]]
+    const bag = ids.reduce((inventory, id, index) => placeItem(inventory, item(id), id, anchors[index]), createInventory())
+    const loadout = playerLoadout(character, hero, bag)
     expect(loadout.bonuses).toEqual({ maxHealth: amounts[0], armor: amounts[1], maxShield: amounts[2] })
     expect(loadout.definition.maxHealth).toBe(hero.health + amounts[0])
     expect(createCombat({ player: loadout.definition, enemy: enemyLoadout(stagesFor(character)[0]) }).player.shield).toBe(amounts[2])

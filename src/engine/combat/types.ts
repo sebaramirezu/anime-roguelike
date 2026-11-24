@@ -2,12 +2,15 @@ import type { ActiveEffect, GameEffect } from '../effects/types'
 
 export type CombatStatus = 'running' | 'victory' | 'defeat' | 'timeout'
 
+export type BonusHit = { kind: 'physical' | 'energy' | 'clone'; damage: number }
+
 export interface WeaponDefinition {
   /** Stable identifier for this weapon within its owner's loadout. */
   id: string
   damage: number
   /** Time between automatic attacks, in milliseconds. Must be greater than 0. */
   cooldownMs: number
+  bonusHits?: readonly BonusHit[]
 }
 
 export interface CombatantDefinition {
@@ -17,6 +20,7 @@ export interface CombatantDefinition {
   armor?: number
   maxShield?: number
   supports?: readonly CombatSupport[]
+  openingEffects?: readonly Extract<GameEffect, { kind: 'damageBoost' }>[]
   weapons: readonly WeaponDefinition[]
 }
 
@@ -42,6 +46,7 @@ export type ResolvedAttack = {
   damage: number
   absorbed?: number
   critical?: boolean
+  bonusHit?: BonusHit['kind']
   lethal: boolean
 }
 
@@ -49,10 +54,11 @@ export type CombatSupport = {
   id: string
   name: string
   threshold: number
+  strictThreshold?: boolean
   effects: readonly GameEffect[]
 }
 
-export type ResolvedSupport = { target: 'player' | 'enemy'; name: string; healed: number; buff: boolean }
+export type ResolvedSupport = { target: 'player' | 'enemy'; name: string; healed: number; buff: boolean; damageBoost?: boolean }
 
 export interface CombatState {
   player: CombatantState

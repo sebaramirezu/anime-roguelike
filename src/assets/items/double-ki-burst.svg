@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 24" shape-rendering="crispEdges" role="img" aria-label="Doble Ráfaga de Ki">
+  <title>Doble Ráfaga de Ki</title>
+  <path fill="#233e80" d="M1 8h5V5h5V3h8v2h3v3h3v5h-2v3h-3v3H9v-2H5v-2H1zm22 9h5v-3h3v-4h3V7h9v3h3v3h1v6h-2v3H31v-1h-8z"/>
+  <path fill="#297dde" d="M3 9h7V6h7v2h4v3h2v2h-3v3H9v-2H6v-2H3zm23 8h4v-3h4v-4h7v2h3v3h1v4h-3v2h-9v-2h-7z"/>
+  <path fill="#5bdbff" d="M6 10h6V7h5v2h3v4h-4v2h-5v-2H6zm23 7h6v-4h6v2h3v3h-3v2h-6v-2h-6z"/>
+  <path fill="#edfffb" d="M13 8h4v2h2v3h-5v-2h-2V9h1zm23 6h4v2h2v2h-6z"/>
+  <path fill="#88baff" d="M2 4h4v2H2zm2 15h4v2H4zm17 1h4v2h-4zm5-9h5v2h-5zm5-7h5v2h-5zm13 1h2v2h-2z"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges" role="img" aria-label="Reliquia del Guardián">
+  <title>Reliquia del Guardián</title>
+  <path fill="#83532f" d="M6 1h4v2h3v3h2v9h-2v4h3v2h8v-2h4v2h3v7h-3v2H16v1H5v-2H2v-5h2v-4H2v-5H1V6h2V3h3z"/>
+  <path fill="#f3bc57" d="M6 3h4v2h3v3h1v5h-2v4H9v3h4v3h11v-2h4v2h1v3h-3v2H15v1H6v-2H4v-3h2v-5H4v-5H3V8h1V5h2z"/>
+  <path fill="#633370" d="M6 6h4v2h2v5h-2v3H6v-3H4V8h2zm2 14h3v5h8v2H8zm12 4h5v2h-5z"/>
+  <path fill="#7ceccf" d="M7 7h2v2h2v3H9v3H7v-3H5V9h2z"/>
+  <path fill="#fff1a5" d="M7 8h2v3H7zm1 9h2v3H8zm4 6h4v2h-4zm7 0h6v2h-6zm7-3h2v2h2v2h-2v2h-2v-2h-2v-2h2z"/>
+  <path fill="#d8fcda" d="M2 2h2v2H2zm10 13h2v2h-2zm6 12h2v1h-2z"/>
+</svg>

@@ -17,7 +17,7 @@ describe('item effects and synergies', () => {
 
     expect(applied.healed).toBe(20)
     expect(applied.target.health).toBe(70)
-    expect(applied.target.activeEffects[0]?.cooldownRateMultiplier).toBe(1.15)
+    expect(applied.target.activeEffects[0]).toMatchObject({ cooldownRateMultiplier: 1.15 })
     const advanced = advanceEffects(applied.target, 10_000)
     expect(advanced.weaponCooldownsMs).toEqual([0])
     expect(advanced.activeEffects).toHaveLength(0)

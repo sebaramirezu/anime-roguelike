@@ -1,5 +1,6 @@
 export { advanceCombat, createCombat, getCombatResult, mitigateDamage } from './combat/combat'
 export type {
+  BonusHit,
   CombatantDefinition,
   CombatantState,
   CombatSupport,

@@ -17,7 +17,10 @@ export const heroSprites: Record<CharacterId, HeroSprites> = {
   goku: {
     base: gokuBase,
     forms: { 'ultra-instinct': gokuInstinct },
-    references: [],
+    references: [
+      { src: gokuBase, label: 'Forma base' },
+      { src: gokuInstinct, label: 'Migatte no Gokui' },
+    ],
   },
   naruto: {
     base: narutoBase,

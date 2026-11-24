@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges" role="img" aria-label="Báculo Kaioken">
+  <title>Báculo Kaioken</title>
+  <path fill="#7e193c" d="M4 1h2v4H4v4H2V5h2zm8 0h1v4h2v9h-2v4h3v2h7v-3h3v4h4v3h2v5h-4v2H14v-2H8v-3H5v-3H2V12h2v9h3v3h4v3h14v-2h-4v-3h-7v-2h-4v-5h2z"/>
+  <path fill="#e7394f" d="M4 5h2v5H4v3H2v-3h2zm9 3h2v5h-2zm-9 9h2v5h3v3h6v2h9v-2h-3v-2h-4v-2h7v2h3v2h3v3h-5v2h-9v-1h-5v-2H7v-3H4z"/>
+  <path fill="#2d0c27" d="M7 1h5v2h1v5h-1v17h1v4h-1v2H7v-2H6v-4h1V8H6V3h1z"/>
+  <path fill="#da3d49" d="M8 7h3v19H8z"/>
+  <path fill="#ff8965" d="M8 9h1v5H8zm0 8h1v5H8zm5 8h6v2h-6zm6 2h7v2h-7z"/>
+  <path fill="#f7bf53" d="M7 3h5v4H7zm0 23h5v3H7z"/>
+  <path fill="#fff39f" d="M8 3h2v2H8zm0 23h2v2H8zm16-8h2v3h-2zm-9 3h2v2h-2zm13 3h2v2h-2z"/>
+</svg>

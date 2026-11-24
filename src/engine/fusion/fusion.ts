@@ -4,6 +4,7 @@ import type { InventoryState, Rotation, SpatialItemDefinition } from '../invento
 
 export interface FusionItemDefinition extends SpatialItemDefinition {
   level: number
+  owner?: string
 }
 
 export interface FusionRecipe {
@@ -20,10 +21,18 @@ export interface FusionRequest {
 export function findFusionResult<T extends FusionItemDefinition>(
   items: readonly T[], recipes: readonly FusionRecipe[], firstId: string, secondId: string,
 ): T | undefined {
-  if (firstId === secondId || ![firstId, secondId].every((id) =>
-    items.some((item) => item.id === id && item.level === 5))) return undefined
-  const recipe = recipes.find(({ ingredients }) => ingredients.includes(firstId) && ingredients.includes(secondId))
-  return items.find((item) => item.id === recipe?.result && item.level === 6)
+  const recipe = recipes.find(({ ingredients: [first, second] }) =>
+    (first === firstId && second === secondId) || (first === secondId && second === firstId))
+  if (!recipe || recipe.result === firstId || recipe.result === secondId) return undefined
+
+  const first = items.find(({ id }) => id === firstId)
+  const second = items.find(({ id }) => id === secondId)
+  const result = items.find(({ id }) => id === recipe.result)
+  if (!first || !second || !result || first.level >= 6 || second.level >= 6) return undefined
+  const owners = new Set([first.owner, second.owner, result.owner].filter((owner) => owner && owner !== 'shared'))
+  if (owners.size > 1 || result.level < 1 || result.level > 6) return undefined
+  if (result.level === 6 && (firstId === secondId || first.level !== 5 || second.level !== 5)) return undefined
+  return result
 }
 
 export function resolveFusion<T extends FusionItemDefinition>(

@@ -8,7 +8,7 @@ import type {
   ResolvedSupport,
   WeaponState,
 } from './types'
-import { advanceEffects, applyEffects, cooldownRate } from '../effects/effects'
+import { advanceEffects, applyEffects, cooldownRate, damageMultiplier } from '../effects/effects'
 
 const DEFAULT_MAX_DURATION_MS = 120_000
 
@@ -26,7 +26,7 @@ function validateCombatant(combatant: CombatantDefinition, label: string): void 
     if (!weapon.id) throw new Error(`${label} weapons must have an id.`)
     if (weaponIds.has(weapon.id)) throw new Error(`${label} weapon ids must be unique.`)
     weaponIds.add(weapon.id)
-    if (!Number.isFinite(weapon.damage) || weapon.damage < 0) {
+    if ([weapon, ...(weapon.bonusHits ?? [])].some(({ damage }) => !Number.isFinite(damage) || damage < 0)) {
       throw new Error(`${label} weapon damage must be a non-negative finite number.`)
     }
     if (!Number.isFinite(weapon.cooldownMs) || weapon.cooldownMs <= 0) {
@@ -36,7 +36,7 @@ function validateCombatant(combatant: CombatantDefinition, label: string): void 
 }
 
 function createCombatant(definition: CombatantDefinition): CombatantState {
-  return {
+  const state: CombatantState = {
     id: definition.id,
     maxHealth: definition.maxHealth,
     health: Math.min(definition.maxHealth, definition.initialHealth ?? definition.maxHealth),
@@ -50,6 +50,9 @@ function createCombatant(definition: CombatantDefinition): CombatantState {
       remainingCooldownMs: 0,
     })),
   }
+  return definition.openingEffects?.length
+    ? { ...state, activeEffects: applyEffects({ ...state, weaponCooldownsMs: [] }, definition.openingEffects).target.activeEffects }
+    : state
 }
 
 export function mitigateDamage(damage: number, armor: number): number {
@@ -96,19 +99,28 @@ function attackReadyWeapons(
   const updatedWeapons = attacker.weapons.map((weapon) => {
     if (weapon.remainingCooldownMs > 1e-9) return weapon
 
-    const previousHealth = updatedTarget.health
-    const mitigated = mitigateDamage(weapon.damage, updatedTarget.armor)
-    const absorbed = Math.min(updatedTarget.shield, mitigated)
-    updatedTarget = {
-      ...updatedTarget,
-      shield: updatedTarget.shield - absorbed,
-      health: Math.max(0, updatedTarget.health - (mitigated - absorbed)),
+    const multiplier = damageMultiplier(attacker.activeEffects, weapon.id)
+    function hit(damage: number, bonusHit?: ResolvedAttack['bonusHit']) {
+      const previousHealth = updatedTarget.health
+      const mitigated = mitigateDamage(damage * multiplier, updatedTarget.armor)
+      const absorbed = Math.min(updatedTarget.shield, mitigated)
+      updatedTarget = {
+        ...updatedTarget,
+        shield: updatedTarget.shield - absorbed,
+        health: Math.max(0, updatedTarget.health - (mitigated - absorbed)),
+      }
+      onAttack?.({
+        source, weaponId: weapon.id, damage: previousHealth - updatedTarget.health,
+        ...(absorbed > 0 ? { absorbed } : {}),
+        ...(bonusHit ? { bonusHit } : {}),
+        lethal: previousHealth > 0 && updatedTarget.health === 0,
+      })
     }
-    onAttack?.({
-      source, weaponId: weapon.id, damage: previousHealth - updatedTarget.health,
-      ...(absorbed > 0 ? { absorbed } : {}),
-      lethal: previousHealth > 0 && updatedTarget.health === 0,
-    })
+    hit(weapon.damage)
+    for (const bonus of weapon.bonusHits ?? []) {
+      if (updatedTarget.health <= 0) break
+      hit(bonus.damage, bonus.kind)
+    }
     return { ...weapon, remainingCooldownMs: weapon.cooldownMs }
   })
 
@@ -119,12 +131,20 @@ function attackReadyWeapons(
 }
 
 function triggerSupport(state: CombatantState, target: ResolvedSupport['target'], notify?: (event: ResolvedSupport) => void) {
-  if (state.health <= 0 || state.activeEffects.length) return state
-  const support = state.supports.find(({ threshold }) => state.health <= state.maxHealth * threshold)
+  if (state.health <= 0) return state
+  const support = state.supports.find(({ threshold, strictThreshold, effects }) => {
+    const limit = state.maxHealth * threshold
+    const reached = strictThreshold ? state.health < limit : state.health <= limit
+    return reached && !effects.some((effect) => effect.kind === 'cooldownReduction'
+      ? state.activeEffects.some((active) => active.kind === 'cooldownReduction')
+      : effect.kind === 'damageBoost' && state.activeEffects.some((active) =>
+        active.kind === 'damageBoost' && active.weaponId === effect.weaponId))
+  })
   if (!support) return state
   const applied = applyEffects({ ...state, weaponCooldownsMs: [] }, support.effects)
   const buff = applied.target.activeEffects.length > state.activeEffects.length
-  notify?.({ target, name: support.name, healed: applied.healed, buff })
+  const damageBoost = support.effects.some(({ kind }) => kind === 'damageBoost')
+  notify?.({ target, name: support.name, healed: applied.healed, buff, ...(damageBoost ? { damageBoost } : {}) })
   return {
     ...state, health: applied.target.health, activeEffects: applied.target.activeEffects,
     supports: state.supports.filter(({ id }) => id !== support.id),

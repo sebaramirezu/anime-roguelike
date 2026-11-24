@@ -10,10 +10,12 @@
 .credits-card > p { color: var(--muted); }
 .credits-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin: 30px 0; color: var(--purple); font-size: 12px; letter-spacing: 1px; }
 @media (max-width: 760px) { .topbar { height: 64px; padding: 0 18px; }.top-status { display: none; }.screen-padding { width: calc(100% - 32px); }.menu-screen { display: block; padding-top: 55px; }.menu-art { height: 300px; margin-top: 20px; }.sun-orb { width: 230px; height: 230px; top: 20px; }.fighter { font-size: 125px; }.fighter-left { bottom: 25px; }.fighter-right { top: 65px; }.slash-one { top: 135px; }.slash-two { top: 190px; }.protocol { bottom: 0; }.menu-copy { margin-bottom: 28px; }.menu-copy h1 { font-size: clamp(48px, 15vw, 80px); letter-spacing: -3px; }.menu-actions { flex-wrap: wrap; }.section-heading { padding-top: 40px; }.back-button { top: 0; }.character-grid, .prep-layout { grid-template-columns: 1fr; }.character-card { grid-template-columns: 110px 1fr; padding: 14px; }.portrait { font-size: 80px; }.character-info h3 { font-size: 30px; }.bottom-action { gap: 15px; align-items: flex-start; flex-direction: column; }.inventory-legend { flex-wrap: wrap; }.credits-card { margin: 45px auto; padding: 35px 18px; } }
-.character-card .portrait img {
+.character-card .portrait img,
+.mini-character img {
   display: block;
   width: 100%;
-  height: clamp(140px, 17vw, 210px);
   object-fit: contain;
   image-rendering: pixelated;
 }
+.character-card .portrait img { height: clamp(140px, 17vw, 210px); }
+.mini-character img { height: 100%; min-height: 0; }

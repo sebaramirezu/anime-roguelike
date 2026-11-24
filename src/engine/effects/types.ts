@@ -1,6 +1,7 @@
 export type GameEffect =
   | { kind: 'heal'; maxHealthPercent: number }
   | { kind: 'cooldownReduction'; percent: number; durationMs: number; mode?: 'duration' }
+  | { kind: 'damageBoost'; percent: number; durationMs: number; weaponId?: string }
   | { kind: 'statBonus'; stat: 'maxHealth' | 'defense' | 'shield'; amount: number }
 
 export interface EffectTarget {
@@ -10,9 +11,8 @@ export interface EffectTarget {
   activeEffects: readonly ActiveEffect[]
 }
 
-export interface ActiveEffect {
-  kind: 'cooldownReduction'
+export type ActiveEffect = { remainingMs: number } & (
   /** Remaining cooldowns recharge at this fraction of their normal rate. */
-  cooldownRateMultiplier: number
-  remainingMs: number
-}
+  | { kind: 'cooldownReduction'; cooldownRateMultiplier: number }
+  | { kind: 'damageBoost'; damageMultiplier: number; weaponId?: string }
+)

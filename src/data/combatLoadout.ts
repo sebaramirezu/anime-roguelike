@@ -15,38 +15,56 @@ export function playerLoadout(character: CharacterId, hero: HeroProgress, invent
   const bonuses = { maxHealth: 0, armor: 0, maxShield: 0 }
   const weapons: CombatantDefinition['weapons'][number][] = []
   const supports: CombatSupport[] = []
+  const openingEffects: NonNullable<CombatantDefinition['openingEffects']>[number][] = []
   const weaponNames = new Map<string, string>()
   const techniqueIds = new Map<string, string>()
   const equipment = inventory.items.flatMap(({ instanceId, itemId }) => {
     const item = catalog.get(itemId)
-    return item ? [{ instanceId, item }] : []
+    return item && (item.owner === character || item.owner === 'shared') ? [{ instanceId, item }] : []
   })
   let cooldownReduction = 0
   for (const { instanceId, item } of equipment) {
     const effects: GameEffect[] = []
+    let belowHealthPercent: number | undefined
     for (const effect of item.effects) {
       if (effect.kind === 'statBonus') bonuses[statKeys[effect.stat]] += effect.amount
-      if (effect.kind === 'heal') effects.push(effect)
+      if (effect.kind === 'heal') {
+        effects.push({ kind: 'heal', maxHealthPercent: effect.maxHealthPercent })
+        belowHealthPercent = effect.belowHealthPercent
+      }
       if (effect.kind === 'weaponCooldownReduction') {
         if (effect.seconds) effects.push({ kind: 'cooldownReduction', percent: effect.percent, durationMs: effect.seconds * 1000, mode: 'duration' })
         else cooldownReduction += effect.percent
       }
+      if (effect.kind === 'damageBoost') {
+        const boost = { kind: 'damageBoost' as const, percent: effect.percent, durationMs: effect.seconds * 1000 }
+        if (effect.belowHealthPercent === undefined) openingEffects.push({ ...boost, weaponId: instanceId })
+        else {
+          effects.push(boost)
+          belowHealthPercent = effect.belowHealthPercent
+        }
+      }
     }
-    if (effects.length) supports.push({ id: instanceId, name: item.name, threshold: 0.65, effects })
+    if (effects.length) supports.push({ id: instanceId, name: item.name, threshold: (belowHealthPercent ?? 65) / 100,
+      strictThreshold: belowHealthPercent !== undefined, effects })
   }
+  const scaledDamage = (damage: number) => Math.round(damage * base.damageMultiplier * 10) / 10
   for (const { instanceId, item } of equipment) {
     if (item.category !== 'Arma') continue
     weaponNames.set(instanceId, item.name)
     techniqueIds.set(instanceId, item.id)
+    const profile = item.effects.find((effect) => effect.kind === 'weaponProfile')
     weapons.push({
-      id: instanceId, damage: Math.round((8 + item.level * 3) * base.damageMultiplier * 10) / 10,
-      cooldownMs: (1000 + item.level * 200) * (1 - Math.min(40, cooldownReduction) / 100),
+      id: instanceId,
+      damage: scaledDamage(profile?.damage ?? 8 + item.level * 3),
+      cooldownMs: (profile?.cooldownMs ?? 1000 + item.level * 200) * (1 - Math.min(40, cooldownReduction) / 100),
+      ...(profile?.bonusHits && { bonusHits: profile.bonusHits.map((hit) => ({ ...hit, damage: scaledDamage(hit.damage) })) }),
     })
   }
   const maxHealth = base.maxHealth + bonuses.maxHealth
   const definition: CombatantDefinition = {
     id: character, maxHealth, armor: bonuses.armor, maxShield: bonuses.maxShield,
-    initialHealth: Math.min(maxHealth, hero.health), weapons, supports,
+    initialHealth: Math.min(maxHealth, hero.health), weapons, supports, openingEffects,
   }
   return {
     definition, weaponNames, techniqueIds, bonuses, health: definition.initialHealth ?? maxHealth,

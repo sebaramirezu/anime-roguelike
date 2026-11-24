@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges" role="img" aria-label="Coraza Blindada">
+  <title>Coraza Blindada</title>
+  <path fill="#100d23" d="M5 1h8v3h6V1h8v2h3v4h1v8h-4v5h1v7h-3v3h-5v1h-8v-1H7v-3H4v-7h1v-5H1V7h1V3h3z"/>
+  <path fill="#61758c" d="M5 3h7v3h8V3h7v2h2v8h-4v7h1v6h-3v2h-4v1h-6v-1H9v-2H6v-6h1v-7H3V5h2z"/>
+  <path fill="#adbed3" d="M5 4h4v3h3v2H7v2H4V6h1zm18 0h4v2h1v5h-3V9h-5V7h3zM8 12h16v6h-3v3H11v-3H8z"/>
+  <path fill="#e0edf2" d="M9 12h14v2H9zm4-5h6v2h-6zm-8 0h2v2H5zm20 0h2v2h-2z"/>
+  <path fill="#354b65" d="M11 18h10v3h3v4h-3v2H11v-2H8v-4h3z"/>
+  <path fill="#d5a65c" d="M8 21h6v2h4v-2h6v2h-5v2h-6v-2H8zM7 11h2v2H7zm16 0h2v2h-2z"/>
+  <path fill="#eff5fd" d="M14 10h4v2h2v4h-2v2h-4v-2h-2v-4h2z"/>
+  <path fill="#748ca8" d="M15 12h2v2h2v1h-2v2h-2v-2h-2v-1h2z"/>
+</svg>

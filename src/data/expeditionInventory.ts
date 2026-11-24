@@ -41,16 +41,25 @@ function translate(shape: readonly Cell[], [x, y]: Cell): readonly Cell[] {
   return shape.map(([column, row]) => [column + x, row + y])
 }
 
-export function previewPlacement({ bag, tray }: ExpeditionInventory, id: string, anchor: Cell) {
+export function previewPlacement({ bag, tray }: ExpeditionInventory, id: string, anchor: Cell, atRotation?: Rotation) {
   const placed = bag.items.find((entry) => entry.instanceId === id)
   const unplaced = tray.find((entry) => entry.id === id)
   const item = placed ? { id: placed.itemId, shape: placed.shape } : unplaced?.item
   if (!item) return undefined
-  const rotation = placed?.rotation ?? unplaced?.rotation ?? 0
+  const rotation = atRotation ?? placed?.rotation ?? unplaced?.rotation ?? 0
   const cells = translate(rotateShape(item.shape, rotation), anchor)
   const valid = canPlaceItem(bag, item, anchor, rotation, placed?.instanceId)
   const fusion = valid ? adjacentRecipe(bag, id, item.id, cells) : undefined
   return fusion ? { cells, valid, fusion: fusion.result } : { cells, valid }
+}
+
+function nextRotation(rotation: Rotation): Rotation {
+  return ((rotation + 90) % 360) as Rotation
+}
+
+export function previewRotation(inventory: ExpeditionInventory, id: string) {
+  const instance = inventory.bag.items.find(({ instanceId }) => instanceId === id)
+  return instance && previewPlacement(inventory, id, instance.anchor, nextRotation(instance.rotation))
 }
 
 function fusionRequest({ bag, tray }: ExpeditionInventory, firstId: string, secondId: string) {
@@ -61,11 +70,18 @@ function fusionRequest({ bag, tray }: ExpeditionInventory, firstId: string, seco
 }
 
 function adjacentRecipe(bag: InventoryState, instanceId: string, itemId: string, cells: readonly Cell[]) {
-  if (bag.combatActive || byId.get(itemId)?.level !== 5) return undefined
-  for (const other of bag.items) {
-    if (other.instanceId === instanceId) continue
-    const result = findFusionResult(items, fusionRecipes, itemId, other.itemId)
-    if (result && findSharedEdge(cells, getOccupiedCells(other))) return { partnerId: other.instanceId, result }
+  if (bag.combatActive) return undefined
+  // Choose by board position so insertion order cannot change the result.
+  const neighbors = bag.items.filter((other) =>
+    other.instanceId !== instanceId && findSharedEdge(cells, getOccupiedCells(other)))
+    .sort((first, second) => {
+      const position = first.anchor[1] - second.anchor[1] || first.anchor[0] - second.anchor[0]
+      if (position || first.instanceId === second.instanceId) return position
+      return first.instanceId < second.instanceId ? -1 : 1
+    })
+  for (const neighbor of neighbors) {
+    const result = findFusionResult(items, fusionRecipes, itemId, neighbor.itemId)
+    if (result) return { partnerId: neighbor.instanceId, result }
   }
 }
 
@@ -107,7 +123,7 @@ export function editInventory(inventory: ExpeditionInventory, command: Inventory
       case 'rotate': {
         const entry = tray.find(({ id }) => id === command.instanceId)
         if (!entry) return commitPlacement({ ...inventory, bag: rotateItem(bag, command.instanceId) }, command.instanceId)
-        const rotation = ((entry.rotation + 90) % 360) as Rotation
+        const rotation = nextRotation(entry.rotation)
         return { ok: true, inventory: { bag, tray: tray.map((item) => item.id === entry.id ? { ...item, rotation } : item) } }
       }
     }

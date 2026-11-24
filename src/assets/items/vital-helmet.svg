@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges" role="img" aria-label="Casco Vital">
+  <title>Casco Vital</title>
+  <path fill="#170f27" d="M11 2h10v2h5v3h3v5h2v11h-3v5h-4v3H8v-3H4v-5H1V12h2V7h3V4h5z"/>
+  <path fill="#516577" d="M11 4h10v2h5v3h2v5h1v7h-3v5h-4v3H10v-3H6v-5H3v-7h1V9h2V6h5z"/>
+  <path fill="#90afaa" d="M11 5h10v2h4v3h2v5h-4v-3h-3v-2h-8v2H9v3H5v-5h2V7h4z"/>
+  <path fill="#0f2a33" d="M6 16h20v5h-3v4h-4v3h-6v-3H9v-4H6z"/>
+  <path fill="#8ae1aa" d="M7 16h18v2H7zm4 4h4v2h-4zm6 0h4v2h-4z"/>
+  <path fill="#53a283" d="M4 21h4v4H6v-2H4zm20 0h4v2h-2v2h-2zm-10 5h4v3h-4z"/>
+  <path fill="#e3ffde" d="M15 5h2v3h3v2h-3v3h-2v-3h-3V8h3z"/>
+</svg>

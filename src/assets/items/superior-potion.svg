@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 24" shape-rendering="crispEdges" role="img" aria-label="Poción Superior">
+  <title>Poción Superior</title>
+  <path fill="#4d2268" d="M2 8h3V5h3v3h3v3H8v3H5v-3H2zm35 8h3v-3h3v3h3v3h-3v3h-3v-3h-3z"/>
+  <path fill="#ffc9f0" d="M5 8h3v3H5zm35 8h3v3h-3z"/>
+  <path fill="#1b0b2c" d="M17 1h14v2h2v5h-2v2h4v2h3v2h3v5h-3v2h-4v2H14v-2h-4v-2H7v-5h3v-2h3v-2h4V8h-2V3h2z"/>
+  <path fill="#b9a3e7" d="M19 7h10v5h5v2h3v2h2v2h-3v2h-4v1H16v-1h-4v-2H9v-2h2v-2h3v-2h5z"/>
+  <path fill="#eea742" d="M17 3h14v4H17z"/>
+  <path fill="#ffe09b" d="M19 3h8v2h-8zM21 8h3v4h-3zm-6 5h5v2h-5z"/>
+  <path fill="#aa3585" d="M11 16h5v-2h16v2h5v2h-4v2H15v-2h-4z"/>
+  <path fill="#ee68b7" d="M14 16h21v2H14z"/>
+  <path fill="#fff1f7" d="M23 12h3v3h3v3h-3v3h-3v-3h-3v-3h3z"/>
+</svg>

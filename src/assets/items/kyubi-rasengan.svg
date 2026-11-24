@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges" role="img" aria-label="Rasengan del Kyubi">
+  <title>Rasengan del Kyubi</title>
+  <path fill="#943152" d="M2 3h4V1h7v2h7V1h6v3h4v6h2v12h-2v5h-6v3h-5v2H9v-2H4v-3H1v-8H0v-8h2z"/>
+  <path fill="#ea5b51" d="M3 5h5V3h4v2h10V3h4v3h3v6h2v9h-3v5h-6v3h-4v1h-7v-2H5v-3H3v-7H1v-5h2z"/>
+  <path fill="#f9a64f" d="M5 8h3V6h6V4h6v3h5v4h3v9h-2v4h-5v3h-9v-3H7v-3H4v-9h2z"/>
+  <path fill="#2a7dc3" d="M10 9h12v3h3v8h-3v4H10v-3H7v-9h3z"/>
+  <path fill="#6ccdf4" d="M10 10h10v2h3v7h-3v3h-8v-2H9v-3h2v2h8v-2h2v-3h-2v-2h-6v2h-3z"/>
+  <path fill="#eafeed" d="M13 13h6v4h-2v2h-4v-2h3v-2h-3z"/>
+  <path fill="#ffef91" d="M7 4h3v2H7zm17 2h3v2h-3zm3 15h3v2h-3zM6 24h4v2H6zm8 4h7v2h-7z"/>
+</svg>

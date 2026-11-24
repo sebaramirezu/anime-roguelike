@@ -14,6 +14,7 @@ export const equipmentConfig = {
 } as const
 
 export function supplyCost(item: Item): number | null {
+  if (item.price === null) return null
   if (item.level === 1) return 2
   if (item.level === 2) return 3
   return null
@@ -89,7 +90,7 @@ export function updateEquippedInventory(session: EquipmentSession, inventory: Ex
 
 export function buyOffer(session: EquipmentSession, id: string): EquipmentSession {
   const offer = session.offers.find((entry) => entry.id === id)
-  if (session.inventory.bag.combatActive || !offer || offer.sold || offer.item.level === 6 || session.gold < offer.price) return session
+  if (session.inventory.bag.combatActive || !offer || offer.sold || offer.item.level === 6 || offer.item.price === null || session.gold < offer.price) return session
   return {
     ...session,
     gold: session.gold - offer.price,

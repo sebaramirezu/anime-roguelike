@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { heroSprites } from '../assets/heroSprites'
-import { ItemShape, Tray } from '../components/inventory/Backpack'
+import { Tray } from '../components/inventory/Backpack'
+import { FusionGuide } from '../components/inventory/FusionGuide'
 import { ItemIcon } from '../components/inventory/ItemIcon'
-import { catalogFor, type CharacterId, type Item } from '../data/items'
+import { ItemShape } from '../components/inventory/ItemShape'
+import { inventoryView } from '../data/expeditionInventory'
+import { catalogFor, describeItemEffect, type CharacterId, type Item } from '../data/items'
 import { equipmentConfig, selectedSupply, supplyCost, validStarterSelection, type EquipmentSession } from '../data/equipmentSession'
 
 function ItemCard({ item, children }: { item: Item; children?: ReactNode }) {
@@ -14,14 +17,8 @@ function ItemCard({ item, children }: { item: Item; children?: ReactNode }) {
     </div></header>
     <p>{item.description}</p>
     <ul className="item-effects">{item.effects.map((effect) => {
-      switch (effect.kind) {
-        case 'heal': return <li key={effect.kind}>Cura {effect.maxHealthPercent}% de la vida máxima.</li>
-        case 'weaponCooldownReduction': return <li key={effect.kind}>
-          Reduce {effect.percent}% el tiempo de reutilización de armas{effect.seconds ? ` durante ${effect.seconds} segundos` : ''}.
-        </li>
-        case 'statBonus': return <li key={effect.kind}>+{effect.amount} de {effect.stat === 'defensa' ? 'armadura' : effect.stat}.</li>
-        case 'technique': return <li key={effect.kind}>{effect.description}</li>
-      }
+      const label = describeItemEffect(effect)
+      return <li key={label}>{label}</li>
     })}</ul>
     <ItemShape item={item} />
     {children}
@@ -82,6 +79,7 @@ export function ShopScreen({ session, onBack, onBuy, onRefresh }: {
   onRefresh: () => void
 }) {
   const { refreshPrice, provisionalGold } = equipmentConfig
+  const { placed, tray } = inventoryView(session.inventory)
   return <section className="screen-padding inner-screen">
     <div className="section-heading">
       <button className="back-button" onClick={onBack}>← PREPARACIÓN</button>
@@ -101,7 +99,8 @@ export function ShopScreen({ session, onBack, onBuy, onRefresh }: {
         </button>
       </ItemCard>
     )}</div>
-    <Tray entries={session.inventory.tray} />
+    <Tray entries={tray} />
+    <FusionGuide character={session.character} placed={placed} tray={tray} />
   </section>
 }
 
@@ -111,26 +110,28 @@ export function ArsenalScreen({ character, onSelect, onBack }: {
   onBack: () => void
 }) {
   const references = heroSprites[character].references
+  const heroName = character === 'goku' ? 'Goku' : 'Naruto'
   return <section className="screen-padding inner-screen">
     <div className="section-heading">
       <button className="back-button" onClick={onBack}>← MENÚ</button>
       <p className="eyebrow">CATÁLOGO</p>
       <h2><span>ARSENAL</span></h2>
-      <p>Consulta las técnicas y el equipo compartido. Los efectos son fichas de referencia.</p>
+      <p>Consulta las técnicas, el equipo compartido y las recetas de fusión.</p>
     </div>
     <div className="equipment-summary">
       <button className="secondary-button" aria-pressed={character === 'goku'} onClick={() => onSelect('goku')}>GOKU</button>
       <button className="secondary-button" aria-pressed={character === 'naruto'} onClick={() => onSelect('naruto')}>NARUTO</button>
     </div>
-    {references.length > 0 && <details className="hero-art-references">
-      <summary>Variantes visuales de Naruto</summary>
+    {references.length > 0 && <details key={character} className="hero-art-references" open={character === 'goku'}>
+      <summary>Variantes visuales de {heroName}</summary>
       <div>{references.map(({ src, label }) => <figure key={src}>
-        <img src={src} alt={`Naruto: ${label}`} loading="lazy" />
+        <img src={src} alt={`${heroName}: ${label}`} loading="lazy" />
         <figcaption>{label}</figcaption>
       </figure>)}</div>
     </details>}
     <div className="equipment-grid">{catalogFor(character).map((item) => <ItemCard key={item.id} item={item}>
-      <small>{item.price === null ? 'Solo por fusión futura' : `${item.price} ◆ de oro`}</small>
+      <small>{item.price === null ? 'Solo por fusión' : `${item.price} ◆ de oro`}</small>
     </ItemCard>)}</div>
+    <FusionGuide />
   </section>
 }

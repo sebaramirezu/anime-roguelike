@@ -28,6 +28,14 @@ export function applyEffects(target: EffectTarget, effects: readonly GameEffect[
         cooldownRateMultiplier: effect.mode === 'duration' ? 1 / (1 - Math.min(effect.percent, 90) / 100) : 1 + effect.percent / 100,
         remainingMs: effect.durationMs,
       })
+    } else if (effect.kind === 'damageBoost') {
+      if (!Number.isFinite(effect.percent) || effect.percent < 0 || !Number.isFinite(effect.durationMs) || effect.durationMs <= 0) {
+        throw new Error('Damage boost must have a non-negative percentage and positive duration.')
+      }
+      activeEffects.push({
+        kind: 'damageBoost', damageMultiplier: 1 + effect.percent / 100,
+        remainingMs: effect.durationMs, weaponId: effect.weaponId,
+      })
     }
   }
 
@@ -35,7 +43,12 @@ export function applyEffects(target: EffectTarget, effects: readonly GameEffect[
 }
 
 export function cooldownRate(effects: readonly ActiveEffect[]): number {
-  return effects.reduce((rate, effect) => rate * effect.cooldownRateMultiplier, 1)
+  return effects.reduce((rate, effect) => effect.kind === 'cooldownReduction' ? rate * effect.cooldownRateMultiplier : rate, 1)
+}
+
+export function damageMultiplier(effects: readonly ActiveEffect[], weaponId: string): number {
+  return effects.reduce((multiplier, effect) => effect.kind === 'damageBoost' && (!effect.weaponId || effect.weaponId === weaponId)
+    ? Math.max(multiplier, effect.damageMultiplier) : multiplier, 1)
 }
 
 /** Advances temporary effects and weapon cooldowns without browser timers. */
@@ -47,9 +60,7 @@ export function advanceEffects(target: EffectTarget, deltaMs: number): EffectTar
   for (let i = 0; i < boundaries.length - 1; i += 1) {
     const start = boundaries[i] ?? 0
     const end = boundaries[i + 1] ?? start
-    const multiplier = target.activeEffects
-      .filter(({ remainingMs }) => remainingMs > start)
-      .reduce((rate, effect) => rate * effect.cooldownRateMultiplier, 1)
+    const multiplier = cooldownRate(target.activeEffects.filter(({ remainingMs }) => remainingMs > start))
     cooldownProgressMs += (end - start) * multiplier
   }
   const activeEffects: ActiveEffect[] = target.activeEffects.flatMap((effect) => {

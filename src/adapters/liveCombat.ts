@@ -5,6 +5,11 @@ import { items } from '../data/items'
 import type { CombatEvent, Combatant, GameEngineAdapter } from './gameEngineAdapter'
 
 const combatTickMs = 100
+const bonusHits = {
+  energy: { name: 'descarga de energía', theme: 'ki' },
+  physical: { name: 'golpe adicional', theme: 'blade' },
+  clone: { name: 'ataque de clon', theme: 'clones' },
+}
 
 function combatantView(state: CombatantState, weaponNames: ReadonlyMap<string, string>): Combatant {
   return {
@@ -12,9 +17,10 @@ function combatantView(state: CombatantState, weaponNames: ReadonlyMap<string, s
     maxHealth: state.maxHealth,
     shield: state.shield,
     maxShield: state.maxShield,
-    stats: { armor: state.armor, damage: state.weapons.reduce((total, weapon) => total + weapon.damage, 0) },
-    effects: state.activeEffects.map(({ remainingMs }, index) => ({
-      id: `cooldown-${index}`, name: 'Recarga acelerada', kind: 'buff',
+    stats: { armor: state.armor, damage: state.weapons.reduce((total, weapon) => total + weapon.damage
+      + (weapon.bonusHits ?? []).reduce((bonus, hit) => bonus + hit.damage, 0), 0) },
+    effects: state.activeEffects.map(({ remainingMs, kind }, index) => ({
+      id: `${kind}-${index}`, name: kind === 'damageBoost' ? 'Daño aumentado' : 'Recarga acelerada', kind: 'buff',
       remainingSeconds: Math.ceil(remainingMs / 100) / 10,
     })),
     weapons: state.weapons.map((weapon) => ({
@@ -61,12 +67,13 @@ export const liveCombat: GameEngineAdapter = {
       function record(event: Omit<CombatEvent, 'id'>) {
         events.push({ ...event, id: String(++eventId) })
       }
-      state = advanceCombat(state, combatTickMs, ({ source, weaponId, damage, absorbed = 0, lethal, critical }) => {
+      state = advanceCombat(state, combatTickMs, ({ source, weaponId, damage, absorbed = 0, lethal, critical, bonusHit }) => {
         const target = source === 'player' ? 'enemy' : 'player'
         const ability = source === 'enemy' ? enemyAbilities.get(weaponId) : undefined
-        const name = ability?.name ?? weaponNames.get(weaponId) ?? 'Ataque'
+        const weaponName = ability?.name ?? weaponNames.get(weaponId) ?? 'Ataque'
+        const name = bonusHit ? `${weaponName} · ${bonusHits[bonusHit].name}` : weaponName
         const techniqueId = ability?.id ?? techniqueIds.get(weaponId)
-        const visual = ability && { theme: ability.theme, special: ability.special }
+        const visual = bonusHit ? { theme: bonusHits[bonusHit].theme } : ability && { theme: ability.theme, special: ability.special }
         if (source === 'player') {
           firstFormAttack ||= !!equippedForm && !visualForm
           totals.attacks++
@@ -80,13 +87,13 @@ export const liveCombat: GameEngineAdapter = {
         if (absorbed > 0) record({ kind: 'shield', source, target, techniqueId, amount: absorbed, text: `El escudo absorbe ${Math.round(absorbed)} de ${name}.` })
         if (damage > 0) record({ kind: 'damage', source, target, techniqueId, amount: damage, critical, text: `${name} inflige ${Math.round(damage)} de daño a la vida.` })
         if (lethal) record({ kind: 'death', target, text: target === 'enemy' ? `${stage.enemy.name} cae.` : 'El campeón cae.' })
-      }, ({ target, name, healed, buff }) => {
+      }, ({ target, name, healed, buff, damageBoost }) => {
         if (target === 'player') {
           totals.healing += healed
           if (buff) buffs.add(name)
         }
         if (healed > 0) record({ kind: 'heal', target, amount: healed, text: `${name} cura ${Math.round(healed)} de vida.` })
-        if (buff) record({ kind: 'effect', target, text: `${name} acelera la recarga.` })
+        if (buff) record({ kind: 'effect', target, text: `${name} ${damageBoost ? 'aumenta el daño' : 'acelera la recarga'}.` })
       })
       // A form is cosmetic and follows the first resolved attack by the equipped hero.
       if (firstFormAttack && equippedForm && state.player.health > 0) {

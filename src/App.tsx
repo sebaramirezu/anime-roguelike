@@ -311,7 +311,7 @@ function Preparation({ character, session, stage, onInventoryCommand, onBack, on
       <div className="loadout-panel panel">
         <div className="panel-title"><span>OPERADOR ACTIVO</span><b>{character.name.toUpperCase()}</b></div>
         <div className="mini-character" aria-hidden="true" style={{ '--character-color': character.color } as React.CSSProperties}>
-          {character.id === 'goku' ? '悟' : '忍'}
+          <img src={heroSprites[character.id].base} alt="" draggable={false} />
         </div>
         <div className="loadout-stats">
           <div><span>Nivel del héroe</span><strong>{loadout.level}</strong></div>
@@ -327,7 +327,7 @@ function Preparation({ character, session, stage, onInventoryCommand, onBack, on
         <button className="secondary-button" onClick={onMap}>MAPA DE EXPEDICIÓN</button>
         <button className="secondary-button" onClick={onCredits}>VER CRÉDITOS</button>
       </div>
-      <Backpack inventory={session.inventory} onCommand={onInventoryCommand} />
+      <Backpack character={character.id} inventory={session.inventory} onCommand={onInventoryCommand} />
     </div>
     <div className="bottom-action">
       <span>Nivel {stage.level} <b>›</b> Etapa {stage.number} / {stage.total}</span>

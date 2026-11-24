@@ -1,19 +1,73 @@
-import { useRef, useState } from 'react'
-import type { Cell, Item } from '../../data/items'
-import { inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand, type InventoryResponse, type UnplacedEntry } from '../../data/expeditionInventory'
-import { rotateShape, type Rotation } from '../../engine'
+import { useRef, useState, type CSSProperties } from 'react'
+import type { Cell, CharacterId, Item } from '../../data/items'
+import { inventoryView, previewPlacement, previewRotation, type ExpeditionInventory, type InventoryCommand, type InventoryResponse, type UnplacedEntry } from '../../data/expeditionInventory'
+import type { Rotation } from '../../engine'
 import { FusionGuide } from './FusionGuide'
 import { ItemIcon } from './ItemIcon'
+import { ItemShape } from './ItemShape'
 
-export function ItemShape({ item, rotation = 0 }: { item: Item; rotation?: Rotation }) {
-  const shape = rotateShape(item.shape, rotation)
-  const width = Math.max(...shape.map(([column]) => column)) + 1
-  const height = Math.max(...shape.map(([, row]) => row)) + 1
-  return <div className="equipment-shape">
-    <div className="shape-grid" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, gridTemplateRows: `repeat(${height}, 1fr)` }}>
-      {shape.map(([column, row]) => <span key={`${column}-${row}`} style={{ gridColumn: column + 1, gridRow: row + 1 }} />)}
-    </div>
-    <small>{item.shape.length} {item.shape.length === 1 ? 'casilla' : 'casillas'}</small>
+function cellKey([column, row]: Cell) {
+  return `${column},${row}`
+}
+
+function cellBounds(cells: readonly Cell[]) {
+  const columns = cells.map(([column]) => column)
+  const rows = cells.map(([, row]) => row)
+  const column = Math.min(...columns)
+  const row = Math.min(...rows)
+  return { column, row, width: Math.max(...columns) - column + 1, height: Math.max(...rows) - row + 1 }
+}
+
+function cellOffset(cells: number) {
+  return `calc(${cells} * var(--inventory-cell-step))`
+}
+
+function spanSize(cells: number) {
+  return `calc(${cells} * var(--inventory-cell-step) - var(--inventory-gap))`
+}
+
+function artworkMask(cells: readonly Cell[], bounds: ReturnType<typeof cellBounds>) {
+  if (cells.length === bounds.width * bounds.height) return undefined
+
+  const occupied = new Set(cells.map(cellKey))
+  return cells.map(([column, row]) => {
+    const left = cellOffset(column - bounds.column)
+    const top = cellOffset(row - bounds.row)
+    // Keep the image continuous across gaps that separate occupied neighbors.
+    const width = occupied.has(cellKey([column + 1, row])) ? 'var(--inventory-cell-step)' : 'var(--inventory-cell-size)'
+    const height = occupied.has(cellKey([column, row + 1])) ? 'var(--inventory-cell-step)' : 'var(--inventory-cell-size)'
+    return `linear-gradient(#000, #000) ${left} ${top} / ${width} ${height} no-repeat`
+  }).join(', ')
+}
+
+function BackpackArtwork({ item, rotation, cells, previewCells }: {
+  item: Item
+  rotation: Rotation
+  cells: readonly Cell[]
+  previewCells?: readonly Cell[]
+}) {
+  const visibleCells = previewCells ?? cells
+  const bounds = cellBounds(visibleCells)
+  const shape = previewCells ? cellBounds(cells) : bounds
+  const quarterTurn = rotation === 90 || rotation === 270
+  const width = quarterTurn ? shape.height : shape.width
+  const height = quarterTurn ? shape.width : shape.height
+
+  return <div className={`inventory-artwork${previewCells ? ' inventory-artwork-preview' : ''}`} aria-hidden="true" style={{
+    gridColumn: `${bounds.column + 1} / span ${bounds.width}`,
+    gridRow: `${bounds.row + 1} / span ${bounds.height}`,
+    mask: artworkMask(visibleCells, bounds),
+  }}>
+    <ItemIcon item={item} footprint={{
+      width, height,
+      style: {
+        left: `calc(${cellOffset(shape.column - bounds.column)} + ${spanSize(shape.width)} / 2)`,
+        top: `calc(${cellOffset(shape.row - bounds.row)} + ${spanSize(shape.height)} / 2)`,
+        width: spanSize(width),
+        height: spanSize(height),
+        rotate: `${rotation}deg`,
+      },
+    }} />
   </div>
 }
 
@@ -37,7 +91,8 @@ export function Tray({ entries, selected, onSelect }: {
   </section>
 }
 
-export function Backpack({ inventory, onCommand }: {
+export function Backpack({ character, inventory, onCommand }: {
+  character?: CharacterId
   inventory: ExpeditionInventory
   onCommand: (command: InventoryCommand) => InventoryResponse
 }) {
@@ -50,7 +105,13 @@ export function Backpack({ inventory, onCommand }: {
   const selectedPlacement = placed.find(({ entry }) => entry.id === selected)
   const entry = selectedPlacement?.entry ?? tray.find(({ id }) => id === selected)
   const preview = entry && previewPlacement(inventory, entry.id, anchor)
+  const rotationFusion = selectedPlacement && previewRotation(inventory, selectedPlacement.entry.id)?.fusion
   const locked = inventory.bag.combatActive
+  const occupants = new Map(placed.flatMap((placement) => placement.cells.map((cell) => [cellKey(cell), placement] as const)))
+  const previewCells = preview?.cells.filter((cell) => {
+    const [column, row] = cell
+    return mask[row]?.[column] !== undefined && !occupants.has(cellKey(cell))
+  })
 
   function select(id?: string, position: Cell = [1, 1]) {
     touchAnchor.current = null
@@ -74,16 +135,15 @@ export function Backpack({ inventory, onCommand }: {
 
   return <div className="inventory-panel panel">
     <div className="panel-title"><span>MOCHILA ESPACIAL</span><b>{capacity} CASILLAS HABILITADAS</b></div>
-    <div className="inventory-grid" style={{ gridTemplateColumns: `repeat(${mask[0].length}, minmax(0, 1fr))` }}>
+    <div className="inventory-grid" style={{ '--inventory-columns': mask[0].length } as CSSProperties}>
       {mask.flatMap((line, row) => line.map((open, column) => {
         const cell = [column, row] as const
-        const occupant = placed.find(({ cells }) => cells.some(([x, y]) => x === column && y === row))
+        const key = cellKey(cell)
+        const occupant = occupants.get(key)
         const projected = preview?.cells.some(([x, y]) => x === column && y === row)
-        const imageCell = occupant ? occupant.cells[0] : preview?.cells[0]
-        const icon = imageCell?.[0] === column && imageCell[1] === row ? occupant?.entry.item ?? entry?.item : undefined
         const previewClass = projected ? preview?.fusion ? ' preview-fusion'
           : preview?.valid ? ' preview-valid' : ' preview-invalid' : ''
-        return <button key={`${column}-${row}`} type="button"
+        return <button key={key} type="button"
           className={`inventory-cell${open ? '' : ' locked'}${occupant ? ' occupied' : ''}${previewClass}`}
           disabled={locked || (!entry && !occupant)}
           aria-label={`Fila ${row + 1}, columna ${column + 1}${occupant ? `, ${occupant.entry.item.name}` : ''}${open ? '' : ', bloqueada'}`}
@@ -104,8 +164,12 @@ export function Backpack({ inventory, onCommand }: {
               select(occupant.entry.id, occupant.anchor)
             }
           }}
-        >{icon && <ItemIcon key={icon.id} item={icon} />}</button>
+        />
       }))}
+      {placed.map(({ entry: { id, item, rotation }, cells }) =>
+        <BackpackArtwork key={id} item={item} rotation={rotation} cells={cells} />)}
+      {entry && preview && !!previewCells?.length &&
+        <BackpackArtwork item={entry.item} rotation={entry.rotation} cells={preview.cells} previewCells={previewCells} />}
     </div>
     <p className="equipment-note">Selecciona un objeto y pulsa una casilla para colocarlo. Pulsa una pieza colocada para moverla o rotarla.</p>
     {entry && <p className="touch-placement equipment-note">En pantalla táctil, pulsa una vez para ver la posición y otra para confirmarla.</p>}
@@ -118,7 +182,7 @@ export function Backpack({ inventory, onCommand }: {
       <ItemShape item={entry.item} rotation={entry.rotation} />
       <button className="secondary-button" disabled={locked} onClick={() =>
         send({ kind: 'rotate', instanceId: entry.id }, 'Rotación guardada.')
-      }>ROTAR 90°</button>
+      }>ROTAR 90°{rotationFusion && ` · FUSIÓN EN ${rotationFusion.name}`}</button>
       {selectedPlacement && <button className="secondary-button" disabled={locked} onClick={() =>
         send({ kind: 'remove', instanceId: entry.id }, 'Objeto devuelto a la bandeja.', true)
       }>RETIRAR</button>}
@@ -126,6 +190,6 @@ export function Backpack({ inventory, onCommand }: {
     </div>}
     {message && <p role={message.error ? 'alert' : 'status'}>{message.text}</p>}
     <Tray entries={tray} selected={selected} onSelect={locked ? undefined : select} />
-    <FusionGuide placed={placed} tray={tray} />
+    <FusionGuide character={character} placed={placed} tray={tray} />
   </div>
 }
