@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { advanceCombat, awardHeroVictory, createCombat, createHeroProgress, createInventory, getInventoryCells, placeItem,
   mitigateDamage, rpgBalance, xpForNextLevel, type HeroProgress, type InventoryState } from '../engine'
-import { enemyLoadout, playerLoadout, victoryGold } from './combatLoadout'
-import { advanceEquipment, buyOffer, equipmentConfig, offersFor, recordVictory, recoverAfterVictory, refreshOffers, startEquipmentSession, updateEquippedInventory, type EquipmentSession } from './equipmentSession'
+import { enemyLoadout, playerLoadout } from './combatLoadout'
+import { advanceEquipment, offersFor, recordVictory, recoverAfterVictory, startEquipmentSession, updateEquippedInventory } from './equipmentSession'
+import { simulateShopCampaign } from './campaignSimulation'
 import { editInventory, type ExpeditionInventory } from './expeditionInventory'
 import { restoreExpedition, serializeExpedition } from './expeditionSave'
 import { items, type Cell, type CharacterId } from './items'
@@ -111,8 +112,9 @@ describe('health and defensive equipment', () => {
     expect(first.player).toMatchObject({ health: 1250, shield: 0 })
     expect(supports).toMatchObject([{ name: 'Completo Italiano', healed: 300, buff: true }])
     expect(first.player.activeEffects[0]).toMatchObject({ remainingMs: 10_000, cooldownRateMultiplier: 1 / 0.85 })
-    expect(advanceCombat(first, 1019).enemy.health).toBe(989)
-    expect(advanceCombat(first, 1020).enemy.health).toBe(978)
+    const damage = loadout.definition.weapons[0].damage
+    expect(advanceCombat(first, 1019).enemy.health).toBe(1000 - damage)
+    expect(advanceCombat(first, 1020).enemy.health).toBe(1000 - 2 * damage)
     expect(advanceCombat(first, 10000).player.activeEffects).toHaveLength(0)
     expect(first.player.supports).toHaveLength(0)
   })
@@ -169,6 +171,18 @@ describe('experience and persistence', () => {
     expect(restoreExpedition(serializeExpedition(migrated))).toEqual(migrated)
   })
 
+  it('preserves boss activation and remaining life when reloading a pending victory', () => {
+    const stageIndex = 11
+    const boss = stagesFor('goku')[stageIndex]
+    const session = recordVictory(starter('goku'), boss, stageIndex, {
+      outcome: 'victory', health: 684, durationSeconds: 51.4,
+      bossPhase: { name: 'Ki concentrado', seconds: 27.1 }, enemyHealth: { current: 0, maximum: 3182 },
+    })
+    const saved = restoreExpedition(serializeExpedition({ session, stageIndex }))
+    expect(saved?.session.pendingVictory).toEqual(session.pendingVictory)
+    expect(saved?.session.hero).toEqual(session.hero)
+  })
+
   it('preserves hero progression and equipment when gold resets and the backpack expands', () => {
     const run = starter('goku')
     const leveled = { ...run, hero: { ...run.hero, level: 2, xp: 50, lastVictory: 11 } }
@@ -193,6 +207,33 @@ describe('experience and persistence', () => {
 })
 
 describe('encounter balance', () => {
+  it('delivers distinct opening damage by rank and makes a lone starter weapon a risky loadout', () => {
+    const stages = stagesFor('goku')
+    const [raditz, cui, dodoria, piccolo] = ['goku-raditz', 'goku-cui', 'goku-dodoria', 'goku-piccolo']
+      .map((id) => enemyLoadout(stages.find(({ enemy }) => enemy.id === id)!))
+    const impacts = [raditz, cui, dodoria, piccolo].map((enemy) => {
+      const hits: number[] = []
+      advanceCombat(createCombat({ player: { id: 'reference-goku', maxHealth: 1250, weapons: [] }, enemy }), 0,
+        ({ damage }) => hits.push(damage))
+      return hits
+    })
+    for (const [index, [minimum, maximum]] of [[45, 65], [75, 110], [75, 110], [100, 150]].entries()) {
+      for (const damage of impacts[index]) {
+        expect(damage).toBeGreaterThanOrEqual(minimum)
+        expect(damage).toBeLessThanOrEqual(maximum)
+      }
+    }
+    expect(impacts[2][0]).toBeGreaterThan(impacts[1][0])
+    expect(dodoria.weapons[0].cooldownMs).toBeGreaterThan(cui.weapons[0].cooldownMs)
+    const hero = createHeroProgress('goku')
+    const solo = playerLoadout('goku', hero, equip(['power-pole']))
+    const paired = playerLoadout('goku', hero, equip(['power-pole', 'ki-orbs']))
+    expect(advanceCombat(createCombat({ player: solo.definition, enemy: raditz }), 120_000).status).toBe('defeat')
+    const outcome = advanceCombat(createCombat({ player: paired.definition, enemy: raditz }), 120_000)
+    expect(outcome.status).toBe('victory')
+    expect(outcome.player.health).toBeLessThan(hero.health * 0.65)
+  })
+
   it('scales the same foe by world and stage and distinguishes normal, minor and major encounters', () => {
     const stages = stagesFor('goku')
     const start = enemyLoadout(stages[0])
@@ -221,15 +262,20 @@ describe('encounter balance', () => {
       let hero: HeroProgress = createHeroProgress(character)
       for (const [index, stage] of stages.entries()) {
         if (index === 0 || index === 27 || index === 45) {
+          const finalGear = character === 'goku'
+            ? ['empowered-kamehameha', 'kaioken-power-pole', 'focused-spirit-bomb', 'superior-saiyan-armor']
+            : ['kyubi-rasengan', 'shadow-kunai', 'kurama-rasenshuriken', 'endurance-vest']
           const selected = index === 0 ? offense.slice(0, 2)
-            : [...(index === 27 ? offense.slice(1, 3) : offense), ...defenses, 'completo-italiano']
+            : index === 27 ? [...offense.slice(1, 3), 'guardian-bracers', ...defenses, 'completo-italiano']
+            : [...finalGear, 'guardian-bracers', 'completo-italiano']
           const bag = equip(selected, stage.level - 1)
           const loadout = playerLoadout(character, hero, bag)
-          const simulated = advanceCombat(createCombat({ player: loadout.definition, enemy: enemyLoadout(stage) }), 120000)
+          const player = { ...loadout.definition, initialHealth: loadout.definition.maxHealth }
+          const simulated = advanceCombat(createCombat({ player, enemy: enemyLoadout(stage) }), 120000)
           results.push({ character, enemy: stage.enemy.name, level: hero.level, seconds: +(simulated.elapsedMs / 1000).toFixed(1),
             remainingHealth: Math.round(simulated.player.health), result: simulated.status })
-          expect(simulated.status).toBe('victory')
-          const [minimum, maximum] = index === 0 ? [18, 45] : index === 27 ? [35, 65] : [48, 95]
+          expect(simulated.status, `${stage.enemy.name} tras ${simulated.elapsedMs / 1000}s, con ${simulated.enemy.health} HP restantes`).toBe('victory')
+          const [minimum, maximum] = index === 0 ? [18, 30] : [35, 75]
           expect(simulated.elapsedMs / 1000).toBeGreaterThanOrEqual(minimum)
           expect(simulated.elapsedMs / 1000).toBeLessThanOrEqual(maximum)
         }
@@ -243,55 +289,17 @@ describe('encounter balance', () => {
   })
 
   it.each(['goku', 'naruto'] as const)('can finish all 46 stages with actual shop purchases and rewards (%s)', (character) => {
-    const initial = character === 'goku' ? ['power-pole', 'ki-orbs'] : ['kunai', 'shadow-clones']
-    const desired = character === 'goku'
-      ? ['kamehameha', 'ki-barrier', 'spirit-bomb', 'saiyan-armor', 'vitality-orb', 'completo-italiano']
-      : ['rasengan', 'chakra-barrier', 'rasenshuriken', 'chunin-vest', 'vitality-seal', 'completo-italiano']
-    const stages = stagesFor(character)
-    const owned = new Set(initial)
-    let session = startEquipmentSession(character, initial.map(item))!
-    function pack(current: EquipmentSession) {
-      let inventory = current.inventory
-      for (const entry of inventory.tray) {
-        for (const anchor of getInventoryCells(inventory.bag.completedLevels)) {
-          const placement = editInventory(inventory, { kind: 'place', instanceId: entry.id, anchor })
-          if (!placement.ok) continue
-          inventory = placement.inventory
-          break
-        }
-      }
-      return updateEquippedInventory(current, inventory)
-    }
-    session = pack(session)
-    for (const [index, stage] of stages.entries()) {
-      if (index >= 2) {
-        const nextItem = desired.find((id) => !owned.has(id))
-        const affordableRefreshes = Math.floor((session.gold - (nextItem ? item(nextItem).price ?? 0 : 0)) / equipmentConfig.refreshPrice)
-        if (nextItem && affordableRefreshes >= 0) {
-          for (let offset = 0; offset <= Math.min(8, affordableRefreshes); offset++) {
-            const options = offset === 0 ? session.offers : offersFor(character, session.round + offset)
-            const offer = options.find(({ item, sold }) => item.id === nextItem && !sold)
-            if (!offer) continue
-            for (let refresh = 0; refresh < offset; refresh++) session = refreshOffers(session)
-            const purchased = buyOffer(session, offer.id)
-            if (purchased !== session) {
-              owned.add(nextItem)
-              session = pack(purchased)
-            }
-            break
-          }
-        }
-      }
-      const player = playerLoadout(character, session.hero, session.inventory.bag)
-      const battle = advanceCombat(createCombat({ player: player.definition, enemy: enemyLoadout(stage) }), 120000)
-      if (battle.status !== 'victory') {
-        throw new Error(`${character} ${stage.id} ${stage.enemy.name}: ${battle.status} after ${battle.elapsedMs / 1000}s`)
-      }
-      session = recordVictory(session, stage, index, { outcome: battle.status, health: battle.player.health, gold: victoryGold(stage) })
-      const next = stages[index + 1]
-      if (next) session = advanceEquipment(recoverAfterVictory(session), victoryGold(stage), next.level !== stage.level)
-    }
-    expect(session.hero.lastVictory).toBe(45)
-    expect(session.hero.level).toBeGreaterThan(5)
+    const result = simulateShopCampaign(character, 'fusion')
+    const last = result.stages.at(-1)!
+    expect(last.outcome, `${last.enemy} tras ${last.seconds} s, con ${last.enemyHp} HP restantes`).toBe('victory')
+    expect(result.stages).toHaveLength(46)
+    expect(result.stages.filter(({ kind }) => kind === 'major').every(({ seconds, phaseAt }) =>
+      seconds >= 30 && seconds <= 75 && phaseAt !== undefined && phaseAt < seconds)).toBe(true)
+    expect(result.hero.lastVictory).toBe(45)
+    expect(result.hero.level).toBeGreaterThan(5)
+    const control = simulateShopCampaign(character)
+    expect(control.stages.at(-1)).toMatchObject({ enemy: character === 'goku' ? 'Cell' : 'Pain', outcome: 'defeat' })
+    const controlNormals = control.stages.filter(({ kind }) => kind === 'normal')
+    expect(controlNormals.filter(({ seconds }) => seconds >= 18 && seconds <= 30).length).toBeGreaterThanOrEqual(24)
   })
 })

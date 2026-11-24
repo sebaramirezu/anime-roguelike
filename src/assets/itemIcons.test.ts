@@ -3,13 +3,18 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ItemIcon } from '../components/inventory/ItemIcon'
 import { FusionGuide } from '../components/inventory/FusionGuide'
+import { Backpack } from '../components/inventory/Backpack'
+import { startEquipmentSession } from '../data/equipmentSession'
+import { createInventory, placeItem, type Cell } from '../engine'
+import { ArsenalScreen, ShopScreen } from '../screens/EquipmentScreens'
 import { fusionRecipes } from '../data/fusionRecipes'
 import { items } from '../data/items'
 import { backpackItemArt, itemIcons, itemIconSource } from './itemIcons'
+import { itemIconTargets } from './itemIconPaths'
 
 describe('bundled inventory art', () => {
   it('maps all item art to catalogue IDs and leaves character PNGs out', () => {
-    expect(itemIcons.size).toBe(38)
+    expect(itemIcons.size).toBe(41)
     for (const [id, { svg, png }] of itemIcons) {
       expect(items.some((item) => item.id === id)).toBe(true)
       expect(svg).toMatch(/\.svg/)
@@ -18,7 +23,8 @@ describe('bundled inventory art', () => {
         expect(png).not.toMatch(/gokufase|naruto/)
       }
     }
-    expect([...itemIcons.values()].filter(({ png }) => png)).toHaveLength(38)
+    const newPngs = itemIconTargets.filter(({ id }) => itemIcons.get(id)?.png).length
+    expect([...itemIcons.values()].filter(({ png }) => png)).toHaveLength(38 + newPngs)
     expect(itemIcons.get('power-pole')?.svg).toMatch(/staff\.svg/)
     expect(itemIcons.get('kurama-rasenshuriken')?.svg).toMatch(/rasenshuriken-kurama\.svg/)
   })
@@ -71,5 +77,31 @@ describe('bundled inventory art', () => {
       .flatMap((id) => itemIconSource(id, new Set()) ?? [])
     expect(html.match(/<img\b/g)).toHaveLength(illustrations.length)
     for (const src of illustrations) expect(html).toContain(`src="${src}"`)
+  })
+
+  it('uses distinct art for the three Saiyan items across shop, backpack, arsenal and fusion results', () => {
+    const gear = itemIconTargets.map(({ id }) => items.find((item) => item.id === id)!)
+    const anchors: readonly Cell[] = [[1, 2], [3, 3], [1, 0]]
+    const bag = gear.reduce((inventory, item, index) => placeItem(inventory, item, item.id, anchors[index]), createInventory())
+    const inventory = { bag, tray: [] }
+    const session = startEquipmentSession('goku', ['power-pole', 'basic-shield'].map((id) => items.find((item) => item.id === id)!))!
+    const offers = gear.map((item) => ({ id: item.id, item, price: item.price!, sold: false }))
+    const noop = () => {}
+    const shop = renderToStaticMarkup(createElement(ShopScreen, { session: { ...session, inventory, offers }, onBack: noop, onBuy: noop, onRefresh: noop }))
+    const arsenal = renderToStaticMarkup(createElement(ArsenalScreen, { character: 'goku', onSelect: noop, onBack: noop }))
+    const backpack = renderToStaticMarkup(createElement(Backpack, { character: 'goku', inventory, onCommand: () => ({ ok: true as const, inventory }) }))
+    const guide = renderToStaticMarkup(createElement(FusionGuide, { character: 'goku' }))
+    for (const { id } of gear) {
+      const icon = itemIcons.get(id)!
+      expect(icon.svg).toContain(`${id}.svg`)
+      const selected = itemIconSource(id, new Set())
+      expect(selected).toBe(icon.png ?? icon.svg)
+      expect(itemIconSource(id, new Set(['/item.png', ...(icon.png ? [icon.png] : [])]), '/item.png')).toBe(icon.svg)
+      for (const html of [shop, arsenal, backpack]) expect(html).toContain(`data-item-icon="${id}" data-pixel-art="true"><img src="${selected}"`)
+    }
+    expect(guide).toContain(`src="${itemIconSource('saiyan-armor', new Set())}"`)
+    expect(guide).toContain(`src="${itemIconSource('vitality-orb', new Set())}"`)
+    expect(guide).toContain(`src="${itemIconSource('superior-saiyan-armor', new Set())}"`)
+    expect(guide).not.toContain('data-item-icon="ki-barrier"')
   })
 })

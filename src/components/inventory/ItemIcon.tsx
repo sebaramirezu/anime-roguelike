@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import { backpackItemArt, itemIconSource } from '../../assets/itemIcons'
+import { backpackItemArt, itemIconSource, pixelItemIcons } from '../../assets/itemIcons'
 import type { Item } from '../../data/items'
 
 type Footprint = { width: number; height: number; style: CSSProperties }
@@ -29,7 +29,8 @@ export function ItemIcon({ item, framed = false, footprint }: {
   const src = itemIconSource(item.id, failed, item.iconPng)
   const imageStyle = src && footprint ? footprintImageStyle(item.id, src, footprint) : undefined
 
-  return <span className={`item-art${framed ? ' equipment-icon' : ''}`} style={footprint?.style} aria-hidden="true" data-item-icon={item.id}>
+  return <span className={`item-art${framed ? ' equipment-icon' : ''}`} style={footprint?.style} aria-hidden="true" data-item-icon={item.id}
+    data-pixel-art={pixelItemIcons.has(item.id) || undefined}>
     {src ? <img key={src} src={src} alt="" draggable={false} style={imageStyle}
       onError={() => setFailed((previous) => new Set([...previous, src]))} /> : item.icon}
   </span>

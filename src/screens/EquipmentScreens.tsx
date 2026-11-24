@@ -124,8 +124,8 @@ export function ArsenalScreen({ character, onSelect, onBack }: {
     </div>
     {references.length > 0 && <details key={character} className="hero-art-references" open={character === 'goku'}>
       <summary>Variantes visuales de {heroName}</summary>
-      <div>{references.map(({ src, label }) => <figure key={src}>
-        <img src={src} alt={`${heroName}: ${label}`} loading="lazy" />
+      <div>{references.map(({ src, label, pixelArt }) => <figure key={label}>
+        <img src={src} alt={`${heroName}: ${label}`} data-pixel-art={pixelArt} loading="lazy" />
         <figcaption>{label}</figcaption>
       </figure>)}</div>
     </details>}

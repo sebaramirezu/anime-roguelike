@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CombatUpdate } from '../adapters/gameEngineAdapter'
 import { liveCombat } from '../adapters/liveCombat'
 import { enemySpriteRegistry, enemyVisual, eventStyle } from '../components/combat/arenaVisuals'
-import { createInventory } from '../engine'
+import { advanceCombat, createCombat, createInventory } from '../engine'
+import type { ResolvedSupport } from '../engine/combat/types'
 import { allEnemies, enemyRoster } from './enemies'
 import { enemyLoadout } from './combatLoadout'
 import { levelsFor, stagesFor } from './levels'
@@ -44,6 +45,39 @@ describe('campaign progression and roster', () => {
     expect(() => liveCombat.startCombat({ character: 'naruto', stage: stagesFor('goku')[0], inventory: createInventory() },
       () => {}, new AbortController().signal)).toThrow('no pertenece')
   })
+
+  it('registers one phase per major boss and leaves other encounters without phases', () => {
+    for (const { stage } of cases) {
+      const supports = enemyLoadout(stage).supports ?? []
+      expect(supports.map(({ techniqueId }) => techniqueId)).toEqual(
+        stage.enemy.kind === 'major' ? [`${stage.enemy.id}-phase`] : [],
+      )
+    }
+  })
+
+  it('lets Majin Buu heal once below the threshold and ends the damage boost on time', () => {
+    const stage = stagesFor('goku').at(-1)!
+    const enemy = enemyLoadout(stage)
+    const thresholdHp = enemy.maxHealth * 0.40
+    const player = { id: 'dummy', maxHealth: 20_000, weapons: [] }
+    const events: ResolvedSupport[] = []
+    const record = (event: ResolvedSupport) => events.push(event)
+    advanceCombat(createCombat({ player, enemy: { ...enemy, initialHealth: thresholdHp } }), 0, undefined, record)
+    expect(events).toEqual([])
+
+    const pressured = createCombat({ player, enemy: { ...enemy, initialHealth: thresholdHp - 1 } })
+    const hitDamage: number[] = []
+    const active = advanceCombat(pressured, 0, ({ damage }) => hitDamage.push(damage), record)
+    expect(events).toEqual([expect.objectContaining({ target: 'enemy', elapsedMs: 0, techniqueId: 'goku-majin-buu-phase',
+      healed: enemy.maxHealth * 0.08, buff: true })])
+    expect(active.enemy.health).toBeCloseTo(thresholdHp - 1 + enemy.maxHealth * 0.08)
+    expect(hitDamage[0]).toBeCloseTo(enemy.weapons[0].damage * 1.32)
+
+    const expired = advanceCombat(active, 16_000, undefined, record)
+    expect(expired.enemy.activeEffects).toEqual([])
+    advanceCombat({ ...expired, enemy: { ...expired.enemy, health: thresholdHp - 1 } }, 2_000, undefined, record)
+    expect(events).toHaveLength(1)
+  })
 })
 
 describe('all campaign encounters', () => {
@@ -59,7 +93,8 @@ describe('all campaign encounters', () => {
     const sprite = enemyVisual(stage)
     expect(sprite).toBe(enemySpriteRegistry.get(enemy.id))
     expect(sprite.mark).toBe(enemy.mark)
-    expect(sprite.png.idle).toContain(`/assets/enemies/${character}/`)
+    const slug = enemy.id.slice(character.length + 1)
+    expect(sprite.png.idle).toBe(`src/assets/enemies/${character}/${slug}/idle.png`)
     expect(Object.keys(sprite.png)).toHaveLength(5)
 
     const updates: CombatUpdate[] = []

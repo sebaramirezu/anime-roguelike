@@ -98,7 +98,7 @@ export function Backpack({ character, inventory, onCommand }: {
 }) {
   const [selected, setSelected] = useState<string>()
   const [anchor, setAnchor] = useState<Cell>([1, 1])
-  const [message, setMessage] = useState<{ error: boolean; text: string }>()
+  const [message, setMessage] = useState<{ error: boolean; text: string; item?: Item }>()
   const touchAnchor = useRef<Cell | null>(null)
   const touchInput = useRef(false)
   const { tray, placed, capacity, mask } = inventoryView(inventory)
@@ -128,9 +128,10 @@ export function Backpack({ character, inventory, onCommand }: {
     }
     if (clearSelection || result.fusion) setSelected(undefined)
     const fusion = result.fusion
-    setMessage({ error: false, text: fusion
-      ? `Fusión completada: ${fusion.item.name} ${fusion.placed ? 'en la mochila' : 'en la bandeja (sin espacio en la mochila)'}.`
-      : success })
+    setMessage(fusion ? {
+      error: false, item: fusion.item,
+      text: `Fusión completada · ${fusion.item.name} ${fusion.placed ? 'en la mochila' : 'en la bandeja (sin espacio en la mochila)'}.`,
+    } : { error: false, text: success })
   }
 
   return <div className="inventory-panel panel">
@@ -177,7 +178,9 @@ export function Backpack({ character, inventory, onCommand }: {
       <span className="item-name"><ItemIcon key={entry.item.id} item={entry.item} />{entry.item.name}</span>
       {' · '}{entry.rotation}° · Fila {anchor[1] + 1}, columna {anchor[0] + 1} · {preview?.valid ? 'Posición válida' : 'Posición inválida'}
     </p>}
-    {preview?.fusion && <p className="fusion-availability" role="status">Al confirmar: fusión en {preview.fusion.name}.</p>}
+    {preview?.fusion && <p className="fusion-availability item-name" role="status">
+      <ItemIcon item={preview.fusion} />Fusión al confirmar · {preview.fusion.name}
+    </p>}
     {entry && <div className="equipment-summary">
       <ItemShape item={entry.item} rotation={entry.rotation} />
       <button className="secondary-button" disabled={locked} onClick={() =>
@@ -188,7 +191,9 @@ export function Backpack({ character, inventory, onCommand }: {
       }>RETIRAR</button>}
       <button className="secondary-button" onClick={() => select()}>CANCELAR SELECCIÓN</button>
     </div>}
-    {message && <p role={message.error ? 'alert' : 'status'}>{message.text}</p>}
+    {message && <p className={message.item ? 'item-name' : undefined} role={message.error ? 'alert' : 'status'}>
+      {message.item && <ItemIcon item={message.item} />}{message.text}
+    </p>}
     <Tray entries={tray} selected={selected} onSelect={locked ? undefined : select} />
     <FusionGuide character={character} placed={placed} tray={tray} />
   </div>

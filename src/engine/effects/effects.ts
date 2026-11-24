@@ -5,11 +5,15 @@ export interface EffectApplication {
   healed: number
 }
 
-/** Cooldown reduction is a temporary faster recharge rate: 15% means 1.15x rate. */
-export function applyEffects(target: EffectTarget, effects: readonly GameEffect[]): EffectApplication {
+function rechargeMultiplier({ percent, mode }: Extract<GameEffect, { kind: 'cooldownReduction' }>): number {
+  return mode === 'duration' ? 1 / (1 - Math.min(percent, 90) / 100) : 1 + percent / 100
+}
+
+export function applyEffects(target: EffectTarget, effects: readonly GameEffect[], sourceId?: string): EffectApplication {
   let health = target.health
   let healed = 0
   const activeEffects = [...target.activeEffects]
+  const source = sourceId === undefined ? {} : { sourceId }
 
   for (const effect of effects) {
     if (effect.kind === 'heal') {
@@ -24,9 +28,8 @@ export function applyEffects(target: EffectTarget, effects: readonly GameEffect[
         throw new Error('Cooldown reduction must have a non-negative percentage and positive duration.')
       }
       activeEffects.push({
-        kind: 'cooldownReduction',
-        cooldownRateMultiplier: effect.mode === 'duration' ? 1 / (1 - Math.min(effect.percent, 90) / 100) : 1 + effect.percent / 100,
-        remainingMs: effect.durationMs,
+        kind: 'cooldownReduction', cooldownRateMultiplier: rechargeMultiplier(effect),
+        remainingMs: effect.durationMs, ...source,
       })
     } else if (effect.kind === 'damageBoost') {
       if (!Number.isFinite(effect.percent) || effect.percent < 0 || !Number.isFinite(effect.durationMs) || effect.durationMs <= 0) {
@@ -34,7 +37,14 @@ export function applyEffects(target: EffectTarget, effects: readonly GameEffect[
       }
       activeEffects.push({
         kind: 'damageBoost', damageMultiplier: 1 + effect.percent / 100,
-        remainingMs: effect.durationMs, weaponId: effect.weaponId,
+        remainingMs: effect.durationMs, weaponId: effect.weaponId, ...source,
+      })
+    } else if (effect.kind === 'damageReduction') {
+      if (!Number.isFinite(effect.percent) || effect.percent < 0 || effect.percent >= 100 || !Number.isFinite(effect.durationMs) || effect.durationMs <= 0) {
+        throw new Error('Damage reduction must be below 100 percent and have positive duration.')
+      }
+      activeEffects.push({
+        kind: 'damageReduction', receivedMultiplier: 1 - effect.percent / 100, remainingMs: effect.durationMs, ...source,
       })
     }
   }
@@ -43,12 +53,27 @@ export function applyEffects(target: EffectTarget, effects: readonly GameEffect[
 }
 
 export function cooldownRate(effects: readonly ActiveEffect[]): number {
-  return effects.reduce((rate, effect) => effect.kind === 'cooldownReduction' ? rate * effect.cooldownRateMultiplier : rate, 1)
+  return effects.reduce((rate, effect) => effect.kind === 'cooldownReduction' ? Math.max(rate, effect.cooldownRateMultiplier) : rate, 1)
 }
 
 export function damageMultiplier(effects: readonly ActiveEffect[], weaponId: string): number {
   return effects.reduce((multiplier, effect) => effect.kind === 'damageBoost' && (!effect.weaponId || effect.weaponId === weaponId)
     ? Math.max(multiplier, effect.damageMultiplier) : multiplier, 1)
+}
+
+export function receivedDamageMultiplier(effects: readonly ActiveEffect[]): number {
+  return effects.reduce((multiplier, effect) => effect.kind === 'damageReduction'
+    ? Math.min(multiplier, effect.receivedMultiplier) : multiplier, 1)
+}
+
+export function isEffectCovered(effect: GameEffect, activeEffects: readonly ActiveEffect[]): boolean {
+  if (effect.kind === 'cooldownReduction') return activeEffects.some((active) => active.kind === 'cooldownReduction'
+    && active.cooldownRateMultiplier >= rechargeMultiplier(effect))
+  if (effect.kind === 'damageReduction') return activeEffects.some((active) => active.kind === 'damageReduction'
+    && active.receivedMultiplier <= 1 - effect.percent / 100)
+  if (effect.kind === 'damageBoost') return activeEffects.some((active) => active.kind === 'damageBoost'
+    && active.weaponId === effect.weaponId && active.damageMultiplier >= 1 + effect.percent / 100)
+  return false
 }
 
 /** Advances temporary effects and weapon cooldowns without browser timers. */

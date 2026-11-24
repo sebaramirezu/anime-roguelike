@@ -15,7 +15,15 @@
   display: block;
   width: 100%;
   object-fit: contain;
+  image-rendering: crisp-edges;
   image-rendering: pixelated;
 }
 .character-card .portrait img { height: clamp(140px, 17vw, 210px); }
 .mini-character img { height: 100%; min-height: 0; }
+.character-card .portrait img[data-pixel-art],
+.mini-character img[data-pixel-art] {
+  width: min(100%, max(var(--pixel-sprite-grid), round(down, min(100%, 180px), var(--pixel-sprite-grid))));
+  height: auto;
+  aspect-ratio: 1;
+  margin-inline: auto;
+}

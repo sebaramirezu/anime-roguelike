@@ -9,7 +9,7 @@ export type HeroProgress = { level: number; xp: number; health: number; lastVict
 export const rpgBalance = {
   xp: { normal: 24, minor: 44, major: 80 },
   xpBase: 75, xpLinear: 30, xpQuadratic: 4,
-  damagePerLevel: 0.075, recovery: 0.55,
+  damagePerLevel: 0.075, recovery: 0.72,
 }
 
 export function xpForNextLevel(level: number) {

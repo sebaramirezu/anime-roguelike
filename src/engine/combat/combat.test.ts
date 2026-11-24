@@ -2,6 +2,35 @@ import { describe, expect, it } from 'vitest'
 import { advanceCombat, createCombat, getCombatResult } from './combat'
 
 describe('automatic combat', () => {
+  it('resolves simultaneous eligible supports at the same instant in both play and simulation', () => {
+    const state = advanceCombat(createCombat({
+      player: { id: 'p', maxHealth: 100, weapons: [{ id: 'w', damage: 10, cooldownMs: 1000 }], supports: [
+        { id: 'heal', name: 'Heal', threshold: 0.75, effects: [{ kind: 'heal', maxHealthPercent: 10 }] },
+        { id: 'boost', name: 'Boost', threshold: 0.75, effects: [{ kind: 'damageBoost', percent: 100, durationMs: 500 }] },
+      ] },
+      enemy: { id: 'e', maxHealth: 200, weapons: [] },
+    }), 0)
+    const injured = { ...state, player: { ...state.player, health: 40 } }
+    const full = advanceCombat(injured, 1000)
+    const stepped = Array.from({ length: 10 }).reduce<typeof injured>((battle) => advanceCombat(battle, 100), injured)
+    expect(full).toEqual(stepped)
+    expect(full.enemy.health).toBe(180)
+    expect(full.player.health).toBe(50)
+    expect(full.player.activeEffects).toEqual([])
+  })
+
+  it('skips other weapons ready at the same instant after a lethal hit', () => {
+    const state = createCombat({
+      player: { id: 'p', maxHealth: 20, weapons: [
+        { id: 'first', damage: 20, cooldownMs: 500 }, { id: 'next', damage: 8, cooldownMs: 700 },
+      ] },
+      enemy: { id: 'e', maxHealth: 15, weapons: [] },
+    })
+    const hits: unknown[] = []
+    const result = advanceCombat(state, 0, (hit) => hits.push(hit))
+    expect(hits).toEqual([{ source: 'player', weaponId: 'first', damage: 15, lethal: true }])
+    expect(result.player.weapons[1].remainingCooldownMs).toBe(0)
+  })
   it('produces a reproducible victory from automatic weapon attacks', () => {
     const combat = createCombat({
       player: { id: 'goku', maxHealth: 20, weapons: [{ id: 'punch', damage: 7, cooldownMs: 500 }] },
@@ -62,5 +91,20 @@ describe('automatic combat', () => {
     expect(result.status).toBe('timeout')
     expect(result.elapsedMs).toBe(200)
     expect(getCombatResult(result)?.winnerId).toBeNull()
+  })
+
+  it('applies temporary guard after armor once and spends shield before health without restoring it', () => {
+    const combat = createCombat({
+      player: {
+        id: 'guard', maxHealth: 400, initialHealth: 150, armor: 100, maxShield: 50, weapons: [],
+        supports: [{ id: 'form', techniqueId: 'ultra-instinct', name: 'Migatte', threshold: 0.48,
+          effects: [{ kind: 'damageReduction', percent: 35, durationMs: 2000 }] }],
+      },
+      enemy: { id: 'attacker', maxHealth: 400, weapons: [{ id: 'hit', damage: 100, cooldownMs: 1000 }] },
+    })
+    const hits: unknown[] = []
+    const result = advanceCombat(combat, 2000, (hit) => hits.push(hit))
+    expect(hits).toMatchObject([{ absorbed: 32.5, damage: 0 }, { absorbed: 17.5, damage: 15 }, { damage: 50 }])
+    expect(result.player).toMatchObject({ shield: 0, maxShield: 50, health: 85, activeEffects: [] })
   })
 })

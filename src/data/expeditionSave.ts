@@ -30,6 +30,10 @@ function isNatural(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
+function isNonNegativeAmount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
 function isCell(value: unknown): value is Cell {
   return Array.isArray(value) && value.length === 2 && value.every(isNatural)
 }
@@ -55,7 +59,7 @@ function readVictory(value: unknown): CombatReport | undefined {
     'xpGained', 'levelsGained', 'healthIncrease', 'damageIncrease'] as const) {
     const amount = value[key]
     if (amount !== undefined) {
-      if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) return undefined
+      if (!isNonNegativeAmount(amount)) return undefined
       report[key] = amount
     }
   }
@@ -65,6 +69,14 @@ function readVictory(value: unknown): CombatReport | undefined {
       if (!Array.isArray(labels) || !labels.every((label) => typeof label === 'string')) return undefined
       report[key] = labels
     }
+  }
+  const { bossPhase, enemyHealth } = value
+  if (isRecord(bossPhase) && typeof bossPhase.name === 'string' && isNonNegativeAmount(bossPhase.seconds)) {
+    report.bossPhase = { name: bossPhase.name, seconds: bossPhase.seconds }
+  }
+  if (isRecord(enemyHealth) && isNonNegativeAmount(enemyHealth.current) && isNonNegativeAmount(enemyHealth.maximum)
+    && enemyHealth.maximum > 0 && enemyHealth.current <= enemyHealth.maximum) {
+    report.enemyHealth = { current: enemyHealth.current, maximum: enemyHealth.maximum }
   }
   return report
 }

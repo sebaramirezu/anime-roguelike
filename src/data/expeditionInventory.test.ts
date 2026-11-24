@@ -169,10 +169,13 @@ describe('expedition backpack regression', () => {
     expect(restoreExpedition(serializeExpedition({ session: { ...session(), inventory: fused }, stageIndex: 0 }))?.session.inventory).toEqual(fused)
   })
 
-  it('blocks every edit and shop purchase during combat and retains the bag after real combat', () => {
+  it.each(['victory', 'defeat'] as const)('blocks edits and shop purchases during real combat and retains the bag after %s', (outcome) => {
     vi.useFakeTimers()
     const started = session()
-    const inventory = place(started.inventory, 'starter-kunai', [2, 1])
+    const armed = place(started.inventory, 'starter-kunai', [2, 1])
+    const inventory = outcome === 'victory'
+      ? place({ ...armed, tray: [...armed.tray, ...setup('shadow-clones').tray] }, 'shadow-clones-instance', [5, 3])
+      : armed
     const locked = { ...inventory, bag: setInventoryCombatLock(inventory.bag, true) }
     const commands: InventoryCommand[] = [
       { kind: 'move', instanceId: 'starter-kunai', anchor: [3, 3] },
@@ -188,7 +191,7 @@ describe('expedition backpack regression', () => {
     liveCombat.startCombat({ character: 'naruto', stage: stagesFor('naruto')[0], inventory: locked.bag },
       (update) => updates.push(update), new AbortController().signal)
     vi.runAllTimers()
-    expect(updates.at(-1)).toMatchObject({ status: 'finished', report: { outcome: 'victory' } })
+    expect(updates.at(-1)).toMatchObject({ status: 'finished', report: { outcome } })
     expect(setInventoryCombatLock(locked.bag, false)).toEqual(inventory.bag)
   })
 })

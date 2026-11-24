@@ -3,14 +3,16 @@ import type { CombatEvent, CombatReport } from '../../adapters/gameEngineAdapter
 import type { HeroForm } from '../../data/heroForms'
 import type { CharacterId } from '../../data/items'
 import type { Stage } from '../../data/levels'
+import { formatCombatAmount } from '../../shared/formatCombatAmount'
 import { AnimatedSprite } from './AnimatedSprite'
-import { arenaPlayback, enemyVisual, eventStyle, heroVisual, outcomeLabels } from './arenaVisuals'
+import { arenaImpacts, arenaPlayback, enemyVisual, eventStyle, heroVisual, outcomeLabels } from './arenaVisuals'
 import './CombatArena.css'
 
-export function CombatArena({ stage, hero, heroForm, events, outcome, leftHud, rightHud }: {
+export function CombatArena({ stage, hero, heroForm, bossPhase, events, outcome, leftHud, rightHud }: {
   stage: Stage
   hero: CharacterId
   heroForm?: HeroForm
+  bossPhase?: string
   events: readonly CombatEvent[]
   outcome?: CombatReport['outcome']
   leftHud: ReactNode
@@ -35,20 +37,20 @@ export function CombatArena({ stage, hero, heroForm, events, outcome, leftHud, r
     <div className="arena-actor arena-player">
       <AnimatedSprite visual={heroVisual(hero, heroForm)} playback={arenaPlayback(events, 'player')} />
     </div>
-    <div className="arena-actor arena-enemy" data-enemy={stage.enemy.id}>
+    <div className="arena-actor arena-enemy" data-enemy={stage.enemy.id} data-boss-phase={bossPhase}>
       <AnimatedSprite key={stage.enemy.id} visual={enemyVisual(stage)} playback={arenaPlayback(events, 'enemy')} facing="left" />
     </div>
     <div className="arena-effects" aria-hidden="true">
       {events.map((event) => {
         if (event.kind === 'attack') return <span key={event.id} className="arena-attack" data-theme={eventStyle(event).theme} data-side={event.source} />
         if (event.kind === 'transform') return <span key={event.id} className="arena-aura" data-theme={eventStyle(event).theme} data-side={event.target} />
-        if ((event.kind === 'damage' || event.kind === 'heal' || event.kind === 'shield') && event.amount !== undefined) {
-          return <span key={event.id} className={`arena-number arena-${event.kind === 'shield' ? 'shield-number' : event.kind}`} data-side={event.target}>
-            {event.kind === 'heal' ? '+' : '−'}{Math.round(event.amount)}
-          </span>
-        }
         return null
       })}
+      {Array.from(arenaImpacts(events), ({ id, kind, target, amount }) =>
+        <span key={id} className={`arena-number arena-${kind === 'shield' ? 'shield-number' : kind}`} data-side={target}>
+          {kind === 'heal' ? '+' : '−'}{formatCombatAmount(amount)}
+        </span>
+      )}
     </div>
     {outcome && <p className="arena-outcome" data-result={outcome} role="status">{outcomeLabels[outcome]}</p>}
   </div>

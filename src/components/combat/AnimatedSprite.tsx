@@ -63,7 +63,7 @@ export function AnimatedSprite({ visual, playback, facing = 'right' }: {
   const [finished, setFinished] = useState<string>()
   const active = playback.pose === 'death' || finished !== playback.id
   const pose = active ? playback.pose : 'idle'
-  const clip = resolveClip(visual, pose)
+  const clip = resolveClip(visual, pose, failed)
   const duration = playbackDuration(visual, playback.pose)
   useEffect(() => {
     if (playback.pose === 'idle' || playback.pose === 'death') return
@@ -73,7 +73,8 @@ export function AnimatedSprite({ visual, playback, facing = 'right' }: {
 
   return <div className="animated-sprite" data-shape={visual.shape} data-facing={facing}
     style={{ '--sprite-light': visual.color, '--pose-duration': `${duration}ms` } as CSSProperties} aria-hidden="true">
-    <div key={`${pose}-${playback.id}`} className="sprite-motion" data-pose={pose}>
+    <div key={`${pose}-${playback.id}`} className="sprite-motion" data-pose={pose}
+      data-pixel-art={clip?.kind === 'png' ? clip.pixelArt : undefined}>
       <SpriteFrames clip={clip} failed={failed} reduced={reduced} atEnd={pose === 'death'} mark={visual.mark}
         onFailure={(src) => setFailed((previous) => new Set([...previous, src]))} />
     </div>

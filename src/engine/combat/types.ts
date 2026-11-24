@@ -52,13 +52,14 @@ export type ResolvedAttack = {
 
 export type CombatSupport = {
   id: string
+  techniqueId?: string
   name: string
   threshold: number
   strictThreshold?: boolean
   effects: readonly GameEffect[]
 }
 
-export type ResolvedSupport = { target: 'player' | 'enemy'; name: string; healed: number; buff: boolean; damageBoost?: boolean }
+export type ResolvedSupport = { target: 'player' | 'enemy'; elapsedMs: number; techniqueId?: string; name: string; healed: number; buff: boolean; damageBoost?: boolean }
 
 export interface CombatState {
   player: CombatantState

@@ -42,8 +42,8 @@ describe('equipped fusion effects', () => {
     expect(definition.weapons[0].cooldownMs).toBeCloseTo(1104)
     const initial = advanceCombat(createCombat({ player: definition, enemy }), 0)
     const beforeSecondHit = advanceCombat(initial, 1103)
-    expect(beforeSecondHit.enemy.health).toBe(enemy.maxHealth - 11)
-    expect(advanceCombat(beforeSecondHit, 1).enemy.health).toBe(enemy.maxHealth - 22)
+    expect(beforeSecondHit.enemy.health).toBe(enemy.maxHealth - 18)
+    expect(advanceCombat(beforeSecondHit, 1).enemy.health).toBe(enemy.maxHealth - 36)
   })
 
   it.each([
@@ -67,19 +67,21 @@ describe('equipped fusion effects', () => {
   })
 
   it.each([
-    ['energized-power-pole', 15, 'energy', 9], ['twin-kunai', 11, 'physical', 12],
-    ['shadow-kunai', 13, 'clone', 12], ['kyubi-clones', 15, 'clone', 12],
-  ] as const)('resolves %s bonus damage as a separate hit through armor and shield', (id, primary, bonusHit, extra) => {
+    ['energized-power-pole', 26, 'energy', [16]], ['twin-kunai', 16, 'physical', [15]],
+    ['shadow-kunai', 19, 'clone', [16]], ['kyubi-clones', 24, 'clone', [12, 10]],
+    ['double-ki-burst', 24, 'energy', [18]],
+  ] as const)('resolves %s bonus damage as separate hits through armor and shield', (id, primary, bonusHit, extras) => {
     const { definition } = loadout(id)
     const target = { ...enemy, armor: 100, maxShield: 2 }
     const events: ResolvedAttack[] = []
     const result = advanceCombat(createCombat({ player: definition, enemy: target }), 0, (event) => events.push(event))
-    expect(events).toMatchObject([{ damage: primary / 2 - 2, absorbed: 2 }, { damage: extra / 2, bonusHit }])
-    expect(result.enemy.health).toBe(enemy.maxHealth - (primary + extra) / 2 + 2)
+    expect(events).toMatchObject([{ damage: primary / 2 - 2, absorbed: 2 },
+      ...extras.map((extra) => ({ damage: extra / 2, bonusHit }))])
+    expect(result.enemy.health).toBe(enemy.maxHealth - (primary + extras.reduce((sum, extra) => sum + extra, 0)) / 2 + 2)
   })
 
   it.each([
-    ['double-ki-burst', 18, 875], ['empowered-kamehameha', 42, 1260],
+    ['double-ki-burst', 42, 1360], ['empowered-kamehameha', 88, 2250],
   ] as const)('uses the new damage and cadence for %s', (id, damage, cooldownMs) => {
     const { definition } = loadout(id)
     const before = advanceCombat(createCombat({ player: definition, enemy }), cooldownMs - 1)
@@ -88,33 +90,50 @@ describe('equipped fusion effects', () => {
   })
 
   it.each([
-    ['kaioken-power-pole', 'power-pole', 22], ['kyubi-rasengan', 'kunai', 27],
-  ] as const)('limits the opening damage boost of %s to its own weapon and duration', (id, companion, damage) => {
+    ['kaioken-power-pole', 'power-pole', 35, 18], ['kyubi-rasengan', 'kunai', 69, 15],
+  ] as const)('limits the opening damage boost of %s to its own weapon and duration', (id, companion, damage, companionDamage) => {
     const inventory = placeItem(equipped(id), item(companion), 'companion', [4, 1])
     const { definition } = loadout(id, inventory)
     const events: ResolvedAttack[] = []
     const start = createCombat({ player: definition, enemy })
     const first = advanceCombat(start, 0, (event) => events.push(event))
     expect(events.find(({ weaponId }) => weaponId === 'fusion')?.damage).toBeCloseTo(damage * 1.3)
-    expect(events.find(({ weaponId }) => weaponId === 'companion')?.damage).toBe(11)
+    expect(events.find(({ weaponId }) => weaponId === 'companion')?.damage).toBe(companionDamage)
     const later = advanceCombat(first, 12_000, (event) => events.push(event))
     expect(later.player.activeEffects).toHaveLength(0)
     expect(events.findLast(({ weaponId, bonusHit }) => weaponId === 'fusion' && !bonusHit)?.damage).toBe(damage)
   })
 
   it.each([
-    ['ultra-instinct', 'goku', 'power-pole', 35, 35, 12_000], ['baryon-mode', 'naruto', 'kunai', 40, 45, 10_000],
-  ] as const)('uses %s as a once-per-battle damage boost when health drops', (id, character, weapon, threshold, boost, durationMs) => {
+    ['ultra-instinct', 'goku', 'power-pole', 55, 11_000, 'damageReduction'],
+    ['baryon-mode', 'naruto', 'kunai', 90, 7_000, 'cooldownReduction'],
+  ] as const)('uses %s once below 48 percent health and expires both effects', (id, character, weapon, boost, durationMs, secondary) => {
     const inventory = placeItem(equipped(id), item(weapon), 'companion', [4, 1])
     const { definition } = playerLoadout(character satisfies CharacterId, createHeroProgress(character), inventory)
-    const player = { ...definition, maxHealth: 1000, initialHealth: threshold * 10 - 1 }
+    const player = { ...definition, maxHealth: 1000, initialHealth: 479 }
+    const damage = definition.weapons[0].damage
+    const atThreshold = advanceCombat(createCombat({ player: { ...player, initialHealth: 480 }, enemy }), 0)
+    expect(atThreshold.player.activeEffects).toHaveLength(0)
     const events: ResolvedAttack[] = []
     const first = advanceCombat(createCombat({ player, enemy }), 0, (event) => events.push(event))
-    expect(events[0].damage).toBeCloseTo(11 * (1 + boost / 100))
-    expect(first.player.activeEffects[0]).toMatchObject({ kind: 'damageBoost', remainingMs: durationMs })
+    expect(events[0].damage).toBeCloseTo(damage * (1 + boost / 100))
+    expect(first.player.activeEffects).toMatchObject([{ kind: 'damageBoost', remainingMs: durationMs, sourceId: id },
+      { kind: secondary, remainingMs: durationMs, sourceId: id }])
     expect(first.player.supports).toHaveLength(0)
     const after = advanceCombat(first, durationMs + 1200, (event) => events.push(event))
     expect(after.player.activeEffects).toHaveLength(0)
-    expect(events.at(-1)?.damage).toBe(11)
+    expect(events.at(-1)?.damage).toBe(damage)
+  })
+
+  it('consumes only one mythic form even if two completed copies are equipped', () => {
+    const bag = placeItem(equipped('ultra-instinct'), item('ultra-instinct'), 'duplicate', [3, 3])
+    const { definition } = loadout('ultra-instinct', bag)
+    expect(bag.items).toHaveLength(2)
+    expect(definition.supports).toHaveLength(1)
+    const activations: string[] = []
+    const state = createCombat({ player: { ...definition, initialHealth: 450 }, enemy })
+    const result = advanceCombat(state, 12_000, undefined, ({ name }) => activations.push(name))
+    expect(activations).toEqual(['Migatte no Gokui'])
+    expect(result.player.activeEffects).toEqual([])
   })
 })

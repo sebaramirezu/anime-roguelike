@@ -1,12 +1,17 @@
 import type { Combatant, CombatReport, CombatUpdate, Stats } from '../adapters/gameEngineAdapter'
 import { CombatArena } from '../components/combat/CombatArena'
 import { outcomeLabels } from '../components/combat/arenaVisuals'
-import type { CharacterId } from '../data/items'
+import { ItemIcon } from '../components/inventory/ItemIcon'
+import { bossPhaseFor } from '../data/bossPhases'
+import { playerLoadout } from '../data/combatLoadout'
+import type { EquipmentSession } from '../data/equipmentSession'
+import { describeItemEffect, type CharacterId } from '../data/items'
 import { enemyLabels, levelsFor, type Stage } from '../data/levels'
 import { STAGE_WARNING } from '../shared/gameConstants'
+import { formatCombatAmount } from '../shared/formatCombatAmount'
 
 const unavailable = 'No disponible'
-const value = (number?: number, unit = '') => number === undefined ? unavailable : `${Number(number.toFixed(1))}${unit}`
+const value = (number?: number, unit = '') => number === undefined ? unavailable : `${formatCombatAmount(number)}${unit}`
 const list = (entries?: readonly string[]) => entries ? entries.join(' · ') || 'Ninguno' : unavailable
 const health = (current?: number, maximum?: number) => `${value(current)} / ${value(maximum)}`
 
@@ -49,19 +54,70 @@ export function StageMap({ current, demo, onBack, onPreview }: {
   </section>
 }
 
-export function StageNotice({ stage, demo, onStart, onBack }: {
+const bossSpecialties: Record<string, { offense: string; defense: string }> = {
+  'goku-piccolo': { offense: 'Ataques de Ki', defense: 'Guardia firme' },
+  'goku-vegeta': { offense: 'Ráfagas de Ki', defense: 'Protección de combate' },
+  'goku-freezer': { offense: 'Cadencia alta', defense: 'Resistencia alta' },
+  'goku-cell': { offense: 'Golpes contundentes', defense: 'Resistencia alta' },
+  'goku-majin-buu': { offense: 'Presión sostenida', defense: 'Gran aguante' },
+  'naruto-zabuza': { offense: 'Combate con espada', defense: 'Guardia firme' },
+  'naruto-orochimaru': { offense: 'Ataques de desgaste', defense: 'Resistencia alta' },
+  'naruto-gaara': { offense: 'Técnicas de arena', defense: 'Escudo reforzado' },
+  'naruto-itachi': { offense: 'Técnicas especiales', defense: 'Resistencia alta' },
+  'naruto-pain': { offense: 'Golpes de alto impacto', defense: 'Gran aguante' },
+}
+
+function BossLoadout({ session }: { session: EquipmentSession }) {
+  const loadout = playerLoadout(session.character, session.hero, session.inventory.bag)
+  const { maxHealth, maxShield, armor } = loadout.definition
+  return <section className="boss-loadout" aria-labelledby="boss-loadout-heading">
+    <h3 id="boss-loadout-heading">Mochila equipada</h3>
+    <Meter label={`Vida de entrada · ${value(loadout.health * 100 / maxHealth, '%')}`} current={loadout.health} maximum={maxHealth} />
+    <dl className="boss-defense">
+      <div><dt>Escudo inicial</dt><dd>{value(maxShield)}</dd></div>
+      <div><dt>Armadura</dt><dd>{value(armor)}</dd></div>
+    </dl>
+    {loadout.equipment.length ? <ul className="boss-items">
+      {loadout.equipment.map(({ instanceId, item }) => <li key={instanceId}>
+        <ItemIcon item={item} />
+        <span>{item.name}{item.effects.filter(({ kind }) => kind === 'heal').map((effect) => <small key={effect.kind}>
+          {describeItemEffect(effect)}
+        </small>)}</span>
+      </li>)}
+    </ul> : <p>La mochila está vacía.</p>}
+  </section>
+}
+
+export function StageNotice({ stage, demo, session, onStart, onBack }: {
   stage: Stage
   demo: boolean
+  session?: EquipmentSession
   onStart: () => void
   onBack: () => void
 }) {
+  const major = stage.enemy.kind === 'major'
+  const specialties = major ? bossSpecialties[stage.enemy.id] : undefined
   return <section className="screen-padding inner-screen">
-    <div className="panel stage-gate">
+    <div className={`panel stage-gate${major ? ' boss-stage-gate' : ''}`}>
       <p className="eyebrow">{demo && 'DEMO · '}NIVEL {stage.level} · ETAPA {stage.number} / {stage.total}</p>
-      <h2>{STAGE_WARNING}</h2>
-      <p>{stage.region} · {enemyLabels[stage.enemy.kind]} · {stage.enemy.name}</p>
+      {major ? <div className="boss-brief">
+        <div>
+          <p className="boss-rank">Jefe principal</p>
+          <h2>{stage.enemy.name}</h2>
+          <p className="boss-region">{stage.region}</p>
+          {specialties && <dl className="boss-specialties">
+            <div><dt>Ofensiva</dt><dd>{specialties.offense}</dd></div>
+            <div><dt>Defensa</dt><dd>{specialties.defense}</dd></div>
+          </dl>}
+          {bossPhaseFor(stage.enemy) && <p className="boss-phase-warning">Este jefe puede entrar en una fase fuerte durante el combate.</p>}
+        </div>
+        {session && <BossLoadout session={session} />}
+      </div> : <>
+        <h2>{STAGE_WARNING}</h2>
+        <p>{stage.region} · {enemyLabels[stage.enemy.kind]} · {stage.enemy.name}</p>
+      </>}
       <div className="equipment-summary">
-        <button className="secondary-button" onClick={onBack}>VOLVER</button>
+        <button className="secondary-button" onClick={onBack}>{major ? 'VOLVER A PREPARACIÓN' : 'VOLVER'}</button>
         <button className="primary-button" onClick={onStart}>{demo ? 'VER ARENA DEMO' : 'INICIAR COMBATE'}</button>
       </div>
     </div>
@@ -78,9 +134,10 @@ function Meter({ label, current, maximum, shield = false }: { label: string; cur
   </div>
 }
 
-function FighterHud({ name, state }: { name: string; state?: Combatant }) {
-  return <div className="arena-hud">
+function FighterHud({ name, state, side }: { name: string; state?: Combatant; side: 'player' | 'enemy' }) {
+  return <div className="arena-hud" data-side={side}>
     <h3>{name}</h3>
+    {state?.bossPhase && <p className="arena-phase-name" role="status">Fase fuerte · {state.bossPhase}</p>}
     {state?.progression && <p className="arena-progression">Nivel {state.progression.level} · XP {state.progression.xp} / {state.progression.xpNeeded}</p>}
     <Meter label="Vida" current={state?.health} maximum={state?.maxHealth} />
     <Meter label="Escudo" current={state?.shield} maximum={state?.maxShield} shield />
@@ -131,9 +188,9 @@ export function CombatScreen({ stage, hero, update, demo, error, onBack, onRepor
     {demo && <p className="stage-notice">DEMO visual. Conecta el motor para ver ataques automáticos, efectos y estadísticas.</p>}
     {error && <p className="stage-notice" role="alert">{error}</p>}
     {!demo && !error && !update && <p role="status">Esperando el estado del motor…</p>}
-    <CombatArena stage={stage} hero={hero.id} heroForm={update?.player?.visualForm} events={events} outcome={outcome}
-      leftHud={<FighterHud name={hero.name} state={update?.player} />}
-      rightHud={<FighterHud name={stage.enemy.name} state={update?.enemy} />} />
+    <CombatArena stage={stage} hero={hero.id} heroForm={update?.player?.visualForm} bossPhase={update?.enemy?.bossPhase} events={events} outcome={outcome}
+      leftHud={<FighterHud name={hero.name} state={update?.player} side="player" />}
+      rightHud={<FighterHud name={stage.enemy.name} state={update?.enemy} side="enemy" />} />
     <LevelUpNotice report={update?.status === 'finished' ? update.report : undefined} />
     {outcome && <div className="arena-actions"><button className="primary-button" onClick={onReport}>VER INFORME →</button></div>}
     <div className="combat-arena">
@@ -171,6 +228,8 @@ export function ResultScreen({ stage, report, onContinue, onMap }: {
     ['Críticos', value(report?.criticals)],
     ['Mejoras aplicadas (buffs)', list(report?.buffs)],
     ['Penalizaciones aplicadas (debuffs)', list(report?.debuffs)],
+    ...(report?.enemyHealth ? [['Vida restante del jefe', health(report.enemyHealth.current, report.enemyHealth.maximum)]] : []),
+    ...(report?.bossPhase ? [['Fase fuerte', `${report.bossPhase.name} · ${formatCombatAmount(report.bossPhase.seconds)} s`]] : []),
     ['Duración', value(report?.durationSeconds, ' s')],
     ['Oro obtenido', value(report?.gold)],
     ['Experiencia obtenida', value(report?.xpGained, ' XP')],
@@ -190,8 +249,8 @@ export function ResultScreen({ stage, report, onContinue, onMap }: {
       <dl className="combat-stats report-stats">
         {rows.map(([label, metric]) => <div key={label}><dt>{label}</dt><dd>{metric}</dd></div>)}
       </dl>
-      {report?.outcome === 'defeat' && stage.enemy.kind !== 'normal' &&
-        <p className="stage-notice">Debilidad del jefe: {report.enemyWeakness ?? unavailable}</p>}
+      {report?.outcome === 'defeat' && report.enemyWeakness &&
+        <p className="stage-notice">Debilidad del jefe · {report.enemyWeakness}</p>}
     </section>
     <div className="bottom-action">
       {!report && <button className="secondary-button" onClick={onMap}>VER MAPA</button>}

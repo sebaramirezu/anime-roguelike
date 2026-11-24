@@ -8,7 +8,7 @@ import type {
   ResolvedSupport,
   WeaponState,
 } from './types'
-import { advanceEffects, applyEffects, cooldownRate, damageMultiplier } from '../effects/effects'
+import { advanceEffects, applyEffects, cooldownRate, damageMultiplier, isEffectCovered, receivedDamageMultiplier } from '../effects/effects'
 
 const DEFAULT_MAX_DURATION_MS = 120_000
 
@@ -96,13 +96,14 @@ function attackReadyWeapons(
   onAttack?: (attack: ResolvedAttack) => void,
 ): { attacker: CombatantState; target: CombatantState } {
   let updatedTarget = target
+  const receivedMultiplier = receivedDamageMultiplier(target.activeEffects)
   const updatedWeapons = attacker.weapons.map((weapon) => {
-    if (weapon.remainingCooldownMs > 1e-9) return weapon
+    if (updatedTarget.health <= 0 || weapon.remainingCooldownMs > 1e-9) return weapon
 
     const multiplier = damageMultiplier(attacker.activeEffects, weapon.id)
     function hit(damage: number, bonusHit?: ResolvedAttack['bonusHit']) {
       const previousHealth = updatedTarget.health
-      const mitigated = mitigateDamage(damage * multiplier, updatedTarget.armor)
+      const mitigated = mitigateDamage(damage * multiplier, updatedTarget.armor) * receivedMultiplier
       const absorbed = Math.min(updatedTarget.shield, mitigated)
       updatedTarget = {
         ...updatedTarget,
@@ -130,25 +131,33 @@ function attackReadyWeapons(
   }
 }
 
-function triggerSupport(state: CombatantState, target: ResolvedSupport['target'], notify?: (event: ResolvedSupport) => void) {
+function triggerSupport(state: CombatantState, target: ResolvedSupport['target'], elapsedMs: number, notify?: (event: ResolvedSupport) => void) {
   if (state.health <= 0) return state
   const support = state.supports.find(({ threshold, strictThreshold, effects }) => {
     const limit = state.maxHealth * threshold
     const reached = strictThreshold ? state.health < limit : state.health <= limit
-    return reached && !effects.some((effect) => effect.kind === 'cooldownReduction'
-      ? state.activeEffects.some((active) => active.kind === 'cooldownReduction')
-      : effect.kind === 'damageBoost' && state.activeEffects.some((active) =>
-        active.kind === 'damageBoost' && active.weaponId === effect.weaponId))
+    return reached && !effects.some((effect) => isEffectCovered(effect, state.activeEffects))
   })
   if (!support) return state
-  const applied = applyEffects({ ...state, weaponCooldownsMs: [] }, support.effects)
+  const applied = applyEffects({ ...state, weaponCooldownsMs: [] }, support.effects, support.techniqueId)
   const buff = applied.target.activeEffects.length > state.activeEffects.length
   const damageBoost = support.effects.some(({ kind }) => kind === 'damageBoost')
-  notify?.({ target, name: support.name, healed: applied.healed, buff, ...(damageBoost ? { damageBoost } : {}) })
+  notify?.({ target, elapsedMs, name: support.name, healed: applied.healed, buff, ...(damageBoost ? { damageBoost } : {}),
+    ...(support.techniqueId && { techniqueId: support.techniqueId }) })
   return {
     ...state, health: applied.target.health, activeEffects: applied.target.activeEffects,
     supports: state.supports.filter(({ id }) => id !== support.id),
   }
+}
+
+function triggerReadySupports(state: CombatantState, target: ResolvedSupport['target'], elapsedMs: number, notify?: (event: ResolvedSupport) => void) {
+  let current = state
+  while (current.supports.length) {
+    const next = triggerSupport(current, target, elapsedMs, notify)
+    if (next === current) break
+    current = next
+  }
+  return current
 }
 
 /**
@@ -167,8 +176,8 @@ export function advanceCombat(state: CombatState, deltaMs: number, onAttack?: (a
 
   while (current.status === 'running') {
     current = { ...current,
-      player: triggerSupport(current.player, 'player', onSupport),
-      enemy: triggerSupport(current.enemy, 'enemy', onSupport),
+      player: triggerReadySupports(current.player, 'player', current.elapsedMs, onSupport),
+      enemy: triggerReadySupports(current.enemy, 'enemy', current.elapsedMs, onSupport),
     }
     const ready = current.player.weapons.some((weapon) => weapon.remainingCooldownMs <= 1e-9)
       || current.enemy.weapons.some((weapon) => weapon.remainingCooldownMs <= 1e-9)

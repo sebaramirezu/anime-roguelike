@@ -1,6 +1,7 @@
 import type { CombatEvent, CombatReport } from '../../adapters/gameEngineAdapter'
+import { enemySpritePaths } from '../../assets/enemySpritePaths'
 import { heroSprites } from '../../assets/heroSprites'
-import { heroForms, type HeroForm } from '../../data/heroForms'
+import type { HeroForm } from '../../data/heroForms'
 import type { CharacterId } from '../../data/items'
 import { allEnemies, type EnemyDefinition, type EnemyKind } from '../../data/enemies'
 import type { Stage } from '../../data/levels'
@@ -8,7 +9,7 @@ import type { Stage } from '../../data/levels'
 export type Pose = 'idle' | 'attack' | 'hurt' | 'death' | 'special'
 type Frames = { width: number; height: number; fps: number; loop?: boolean }
 export type SpriteClip =
-  | { kind: 'png'; src: string }
+  | { kind: 'png'; src: string; pixelArt?: true }
   | (Frames & { kind: 'sheet'; src: string; count: number })
   | (Frames & { kind: 'sequence'; sources: readonly string[] })
 
@@ -18,51 +19,43 @@ export type SpriteVisual = {
   color: string
   mark?: string
   clips?: Partial<Record<Pose, SpriteClip>>
+  idleFallback?: SpriteClip
 }
 
 export const assetPath = (path: string) => `${import.meta.env.BASE_URL}assets/${path}`
 
 const heroes: Record<CharacterId, SpriteVisual> = {
-  goku: { folder: 'heroes/goku', shape: 'brawler', color: '#ffbb65', clips: { idle: { kind: 'png', src: heroSprites.goku.base } } },
-  naruto: { folder: 'heroes/naruto', shape: 'scout', color: '#81e5ff', clips: { idle: { kind: 'png', src: heroSprites.naruto.base } } },
+  goku: { folder: 'heroes/goku', shape: 'brawler', color: '#ffbb65', clips: { idle: { kind: 'png', ...heroSprites.goku.base } } },
+  naruto: { folder: 'heroes/naruto', shape: 'scout', color: '#81e5ff', clips: { idle: { kind: 'png', ...heroSprites.naruto.base } } },
 }
-
-function transformedHero(id: CharacterId): SpriteVisual {
-  const src = heroSprites[id].forms[heroForms[id]]
-  return src ? { ...heroes[id], clips: { idle: { kind: 'png', src } } } : heroes[id]
-}
-
-const transformedHeroes = { goku: transformedHero('goku'), naruto: transformedHero('naruto') }
 
 const enemyShapes: Record<EnemyKind, string> = { normal: 'trooper', minor: 'guardian', major: 'colossus' }
 type EnemySprite = SpriteVisual & { png: Readonly<Record<Pose, string>> }
 
-// Add clips here when their local PNGs are available. Planned paths do not issue requests.
+// Register sheets or sequences here. Individual pose PNGs are discovered automatically.
 const installedEnemyClips: Partial<Record<string, SpriteVisual['clips']>> = {}
-const localEnemyPngs = import.meta.glob<string>('../../assets/enemies/*/*/*.png', {
-  eager: true, query: '?url', import: 'default',
+const localEnemyPngs = import.meta.glob<string>('/src/assets/enemies/*/*/*.png', {
+  eager: true, query: '?url&no-inline', import: 'default',
 })
 const poses = ['idle', 'attack', 'hurt', 'death', 'special'] as const
 
-function enemySprite(enemy: EnemyDefinition): EnemySprite {
-  const slug = enemy.id.slice(enemy.character.length + 1)
-  const folder = `enemies/${enemy.character}/${slug}`
+export function enemySprite(enemy: EnemyDefinition, pngs: Readonly<Record<string, string>> = localEnemyPngs): EnemySprite {
+  const { folder, png, pixelIdle } = enemySpritePaths(enemy)
   const sharedFolder = enemy.character === 'naruto' && enemy.kind === 'normal'
-    ? 'enemies/naruto/common' : undefined
+    ? 'src/assets/enemies/naruto/common' : undefined
   const clips: NonNullable<SpriteVisual['clips']> = { ...installedEnemyClips[enemy.id] }
   for (const pose of poses) {
-    const src = localEnemyPngs[`../../assets/${folder}/${pose}.png`]
-      ?? (sharedFolder ? localEnemyPngs[`../../assets/${sharedFolder}/${pose}.png`] : undefined)
+    const src = pngs[`/${png[pose]}`]
+      ?? (sharedFolder ? pngs[`/${sharedFolder}/${pose}.png`] : undefined)
     if (src && !clips[pose]) clips[pose] = { kind: 'png', src }
   }
+  const pixelSrc = pngs[`/${pixelIdle}`]
+    ?? (sharedFolder && !pngs[`/${png.idle}`] ? pngs[`/${sharedFolder}/idle.pixel.png`] : undefined)
+  const idleFallback = pixelSrc ? clips.idle : undefined
+  if (pixelSrc) clips.idle = { kind: 'png', src: pixelSrc, pixelArt: true }
   return {
     folder, shape: enemyShapes[enemy.kind], color: enemy.color, mark: enemy.mark,
-    clips,
-    png: {
-      idle: assetPath(`${folder}/idle.png`), attack: assetPath(`${folder}/attack.png`),
-      hurt: assetPath(`${folder}/hurt.png`), death: assetPath(`${folder}/death.png`),
-      special: assetPath(`${folder}/special.png`),
-    },
+    clips, png, idleFallback,
   }
 }
 
@@ -71,15 +64,18 @@ export const enemySpriteRegistry: ReadonlyMap<string, EnemySprite> = new Map(
 )
 
 export function heroVisual(id: CharacterId, form?: HeroForm): SpriteVisual {
-  return form === heroForms[id] ? transformedHeroes[id] : heroes[id]
+  const artwork = form && heroSprites[id].forms[form]
+  const visual = heroes[id]
+  return artwork ? { ...visual, clips: { idle: { kind: 'png', ...artwork } } } : visual
 }
 
 export function enemyVisual(stage: Stage): EnemySprite {
   return enemySpriteRegistry.get(stage.enemy.id) ?? enemySprite(stage.enemy)
 }
 
-export function resolveClip(visual: SpriteVisual, pose: Pose) {
-  return visual.clips?.[pose] ?? visual.clips?.idle
+export function resolveClip(visual: SpriteVisual, pose: Pose, failed?: ReadonlySet<string>) {
+  return [visual.clips?.[pose], visual.clips?.idle, visual.idleFallback]
+    .find((clip) => clip && (clip.kind === 'sequence' || !failed?.has(clip.src)))
 }
 
 export function frameCount(clip: SpriteClip) {
@@ -120,6 +116,20 @@ export function eventStyle(event: CombatEvent) {
   return event.visual ?? techniques[event.techniqueId ?? ''] ?? { theme: 'strike' }
 }
 
+type Impact = { id: string; target: CombatEvent['target']; kind: 'damage' | 'heal' | 'shield'; amount: number }
+
+export function arenaImpacts(events: readonly CombatEvent[]): Iterable<Impact> {
+  const impacts = new Map<string, Impact>()
+  for (const { id, tick, kind, target, amount } of events) {
+    if (amount === undefined || (kind !== 'damage' && kind !== 'heal' && kind !== 'shield')) continue
+    const key = tick === undefined ? `event-${id}` : `tick-${tick}-${target}-${kind}`
+    const impact = impacts.get(key)
+    if (impact) impact.amount += amount
+    else impacts.set(key, { id: key, target, kind, amount })
+  }
+  return impacts.values()
+}
+
 type Side = CombatEvent['target']
 export type Playback = { pose: Pose; id: string }
 
@@ -132,7 +142,7 @@ export function arenaPlayback(events: readonly CombatEvent[], side: Side): Playb
     const event = events[index]
     if (event.kind === 'transform' && event.target === side) return { id: event.id, pose: 'special' }
     if (event.kind === 'attack' && event.source === side) return { id: event.id, pose: eventStyle(event).special ? 'special' : 'attack' }
-    if (event.kind === 'damage' && event.target === side) return { id: event.id, pose: 'hurt' }
+    if ((event.kind === 'damage' || event.kind === 'shield') && event.target === side) return { id: event.id, pose: 'hurt' }
   }
   return { id: 'idle', pose: 'idle' }
 }

@@ -1,3 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap');
 :root { font-family: 'Rajdhani', sans-serif; color: #f5f0ff; background: #080719; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: #080719; } button { font: inherit; cursor: pointer; }
+:root { --pixel-sprite-grid: 64px; }

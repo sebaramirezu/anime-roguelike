@@ -204,7 +204,8 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
       }}
       onRefresh={() => setSession((current) => current && refreshOffers(current))} />}
     {screen === 'map' && <StageMap current={currentStage} demo={false} onBack={() => setScreen('preparation')} onPreview={() => {}} />}
-    {screen === 'notice' && <StageNotice stage={stage} demo={false} onStart={beginCombat} onBack={() => setScreen('preparation')} />}
+    {screen === 'notice' && <StageNotice stage={stage} demo={false} session={session ?? undefined}
+      onStart={beginCombat} onBack={() => setScreen('preparation')} />}
     {screen === 'combat' && <CombatScreen stage={stage}
       hero={{ id: activeCharacter.id, name: activeCharacter.name }}
       update={settledCombat} demo={false} error={combatError}
@@ -265,7 +266,7 @@ function CharacterSelect({ selected, onSelect, onContinue, onBack }: {
           aria-pressed={isSelected} onClick={() => onSelect(character.id)}
           style={{ '--character-color': character.color } as React.CSSProperties}>
           <div className="portrait">
-            <img src={heroSprites[character.id].base} alt="" draggable={false} />
+            <img src={heroSprites[character.id].base.src} data-pixel-art={heroSprites[character.id].base.pixelArt} alt="" draggable={false} />
           </div>
           <div className="character-info">
             <p className="eyebrow">{character.anime}</p>
@@ -311,7 +312,7 @@ function Preparation({ character, session, stage, onInventoryCommand, onBack, on
       <div className="loadout-panel panel">
         <div className="panel-title"><span>OPERADOR ACTIVO</span><b>{character.name.toUpperCase()}</b></div>
         <div className="mini-character" aria-hidden="true" style={{ '--character-color': character.color } as React.CSSProperties}>
-          <img src={heroSprites[character.id].base} alt="" draggable={false} />
+          <img src={heroSprites[character.id].base.src} data-pixel-art={heroSprites[character.id].base.pixelArt} alt="" draggable={false} />
         </div>
         <div className="loadout-stats">
           <div><span>Nivel del héroe</span><strong>{loadout.level}</strong></div>

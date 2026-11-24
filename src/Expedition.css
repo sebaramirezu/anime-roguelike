@@ -8,6 +8,29 @@
 .stage-gate h2 { font-size: clamp(27px, 5vw, 44px); line-height: 1.1; }
 .stage-gate .equipment-summary { margin: 28px 0 0; }
 
+.boss-stage-gate { max-width: 860px; border-top-color: #ef8aae; }
+.boss-brief { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 4vw, 36px); }
+.boss-rank { color: #ff9bbd; font-size: .82rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.boss-brief h2, .boss-brief h3 { margin: 0; }
+.boss-region { margin: .4rem 0 1rem; color: var(--muted); }
+.boss-specialties, .boss-defense { display: grid; gap: 8px; margin: 12px 0; }
+.boss-specialties div, .boss-defense div {
+  display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 10px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.boss-specialties dt, .boss-defense dt { color: var(--muted); }
+.boss-specialties dd, .boss-defense dd { margin: 0; color: var(--ink); font-weight: 700; }
+.boss-phase-warning { border-inline-start: 2px solid #ef8aae; padding: 6px 10px; color: #ffb4ce; background: #a84b6f19; }
+.boss-loadout { min-width: 0; border: 1px solid var(--line); background: #17122c; padding: clamp(12px, 3vw, 20px); }
+.boss-items { display: grid; gap: 8px; padding: 0; margin: 12px 0 0; list-style: none; }
+.boss-items li { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.boss-items small { display: block; color: var(--muted); }
+
+@media (max-width: 620px) {
+  .boss-brief { grid-template-columns: minmax(0, 1fr); }
+  .boss-stage-gate .equipment-summary > button { flex: 1 1 100%; }
+}
+
 .expedition-map {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));

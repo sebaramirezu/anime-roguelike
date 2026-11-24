@@ -70,6 +70,8 @@
 .arena-actor { --actor-size: clamp(80px, 24vw, 230px); position: absolute; bottom: 13%; width: var(--actor-size); aspect-ratio: 1; z-index: 1; }
 .arena-player { left: 19%; transform: translateX(-25%); }
 .arena-enemy { right: 19%; transform: translateX(25%); }
+.arena-enemy[data-boss-phase] .sprite-motion { filter: drop-shadow(0 0 5px #e672bb); }
+.arena-phase-name { color: #ffb5dd; font-weight: 700; margin: 4px 0; }
 .arena-2d[data-enemy-kind="major"] .arena-enemy { --actor-size: clamp(102px, 28vw, 270px); }
 .arena-actor::before { content: ''; position: absolute; inset: 86% 4% -6%; background: #090917a8; border-radius: 50%; filter: blur(4px); }
 .animated-sprite, .sprite-motion, .sprite-frames, .sprite-placeholder { position: absolute; inset: 0; }
@@ -79,8 +81,16 @@
 .sprite-frames, .sprite-placeholder { transform: scaleX(var(--forward)); }
 .sprite-frames { display: block; overflow: hidden; margin: auto; max-height: 100%; }
 .sprite-sized-frame { top: auto; width: min(100%, calc(100cqh * var(--frame-ratio))); aspect-ratio: var(--frame-ratio); }
-.sprite-frames img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; image-rendering: pixelated; }
+.sprite-frames img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; image-rendering: crisp-edges; image-rendering: pixelated; }
 .sprite-frames .sprite-sheet { max-width: none; object-fit: fill; }
+.sprite-motion[data-pixel-art] img {
+  position: absolute;
+  inset: auto 0 0;
+  width: min(100%, max(var(--pixel-sprite-grid), round(down, 100%, var(--pixel-sprite-grid))));
+  height: auto;
+  aspect-ratio: 1;
+  margin-inline: auto;
+}
 
 .sprite-placeholder { filter: drop-shadow(0 0 12px color-mix(in srgb, var(--sprite-light), transparent 72%)); }
 [data-shape="beast"] .sprite-placeholder { transform: scaleX(calc(-1 * var(--forward))); }
@@ -131,6 +141,17 @@
 @keyframes arena-hurt { 24% { transform: translateX(calc(var(--forward) * -13%)); filter: brightness(2.1) saturate(.5); } }
 @keyframes arena-fall { to { transform: translateY(19%) scale(.85); opacity: 0; } }
 
+@media (prefers-reduced-motion: no-preference) {
+  .sprite-motion[data-pixel-art][data-pose="idle"] { animation-name: arena-pixel-idle; animation-timing-function: steps(2); }
+  .sprite-motion[data-pixel-art]:is([data-pose="attack"], [data-pose="special"]) { animation-name: arena-pixel-lunge; animation-timing-function: steps(4); }
+  .sprite-motion[data-pixel-art][data-pose="hurt"] { animation-name: arena-pixel-hurt; animation-timing-function: steps(4); }
+  .sprite-motion[data-pixel-art][data-pose="death"] { animation-name: arena-pixel-fall; animation-timing-function: steps(4); }
+}
+@keyframes arena-pixel-idle { 50% { transform: translateY(-2px); } }
+@keyframes arena-pixel-lunge { 28% { transform: translateX(calc(var(--forward) * 16px)); } }
+@keyframes arena-pixel-hurt { 24% { transform: translateX(calc(var(--forward) * -8px)); filter: brightness(2.1) saturate(.5); } }
+@keyframes arena-pixel-fall { to { transform: translateY(16px); opacity: 0; } }
+
 .arena-effects { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
 .arena-effects [data-side="player"] { --side-x: 28%; --travel: 1; }
 .arena-effects [data-side="enemy"] { --side-x: 72%; --travel: -1; }
@@ -147,8 +168,8 @@
 .arena-attack[data-theme="wind"] { clip-path: polygon(50% 0, 65% 31%, 100% 50%, 64% 66%, 50% 100%, 33% 67%, 0 50%, 34% 31%); }
 .arena-aura { bottom: 11%; width: clamp(70px, 22vw, 220px); aspect-ratio: 1; transform: translateX(-50%); color: var(--effect, #ffd387); border: 3px solid currentColor; border-radius: 50%; box-shadow: 0 0 25px currentColor; animation: arena-aura .9s ease-out both; }
 .arena-number { bottom: 37%; font-size: clamp(18px, 4vw, 38px); font-weight: 800; color: #ffaca8; text-shadow: 2px 2px #1b101b; animation: arena-number .8s ease-out both; }
-.arena-heal { color: #a5ffb8; }
-.arena-shield-number { color: #92d9ff; }
+.arena-heal { bottom: calc(37% + 2.7em); color: #a5ffb8; }
+.arena-shield-number { bottom: calc(37% + 1.35em); color: #92d9ff; }
 .arena-special-impact { position: absolute; z-index: 2; inset: 0; pointer-events: none; box-shadow: inset 0 0 65px #d8c5ff8c; animation: arena-aura .32s ease-out both; }
 @keyframes arena-trail { 18% { opacity: 1; } to { transform: translateX(calc(var(--travel) * clamp(65px, 26vw, 320px))) scale(1.18); opacity: 0; } }
 @keyframes arena-number { from { transform: translate(-50%, 0); opacity: 1; } 50% { opacity: 1; } to { transform: translate(-50%, -145%); opacity: 0; } }

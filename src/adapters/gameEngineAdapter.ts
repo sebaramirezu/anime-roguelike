@@ -18,6 +18,7 @@ export type Combatant = {
   shield?: number
   maxShield?: number
   visualForm?: HeroForm
+  bossPhase?: string
   progression?: { level: number; xp: number; xpNeeded: number }
   bonuses?: { maxHealth: number; armor: number; maxShield: number }
   stats?: Stats
@@ -27,6 +28,7 @@ export type Combatant = {
 
 export type CombatEvent = {
   id: string
+  tick?: number
   text: string
   kind: 'attack' | 'damage' | 'heal' | 'shield' | 'effect' | 'transform' | 'death'
   target: 'player' | 'enemy'
@@ -53,6 +55,8 @@ export type CombatReport = {
   buffs?: readonly string[]
   debuffs?: readonly string[]
   durationSeconds?: number
+  bossPhase?: { name: string; seconds: number }
+  enemyHealth?: { current: number; maximum: number }
   gold?: number
   xpGained?: number
   levelsGained?: number

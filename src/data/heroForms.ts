@@ -1,6 +1,7 @@
 export const heroForms = {
   goku: 'ultra-instinct',
-  naruto: 'nine-tails-chakra',
+  naruto: 'baryon-mode',
 } as const
 
-export type HeroForm = typeof heroForms[keyof typeof heroForms]
+export const kyubiChakra = 'nine-tails-chakra'
+export type HeroForm = typeof heroForms[keyof typeof heroForms] | typeof kyubiChakra

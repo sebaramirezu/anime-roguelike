@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advanceEffects, applyEffects } from './effects'
+import { advanceEffects, applyEffects, cooldownRate, damageMultiplier } from './effects'
 import { calculateSynergies, type SynergyRule } from './synergies'
 import { createInventory, placeItem } from '../inventory/inventory'
 
@@ -38,5 +38,21 @@ describe('item effects and synergies', () => {
     expect(calculateSynergies(inventory, items, rules)).toMatchObject([
       { ruleId: 'gloves-cooldown', sourceInstanceId: 'glove-1', targetInstanceId: 'weapon-1', value: 8 },
     ])
+  })
+
+  it('takes the strongest applicable temporary damage and recharge values, then restores weaker active effects on expiry', () => {
+    const target = { maxHealth: 100, health: 50, weaponCooldownsMs: [10_000], activeEffects: [] }
+    const meal = applyEffects(target, [{ kind: 'cooldownReduction', percent: 15, durationMs: 10_000, mode: 'duration' }]).target
+    const weapon = applyEffects(meal, [{ kind: 'damageBoost', percent: 30, durationMs: 10_000, weaponId: 'w' }]).target
+    const baryon = applyEffects(weapon, [
+      { kind: 'damageBoost', percent: 90, durationMs: 7000 },
+      { kind: 'cooldownReduction', percent: 24, durationMs: 7000, mode: 'duration' },
+    ], 'baryon-mode').target
+    expect(cooldownRate(baryon.activeEffects)).toBe(1 / 0.76)
+    expect(damageMultiplier(baryon.activeEffects, 'w')).toBe(1.9)
+    const expired = advanceEffects(baryon, 7000)
+    expect(expired.weaponCooldownsMs[0]).toBeCloseTo(10_000 - 7000 / 0.76)
+    expect(cooldownRate(expired.activeEffects)).toBe(1 / 0.85)
+    expect(damageMultiplier(expired.activeEffects, 'w')).toBe(1.3)
   })
 })

@@ -1,3 +1,5 @@
+import { itemIconTargets } from './itemIconPaths'
+
 const svgFiles = import.meta.glob<string>('./items/*.svg', { eager: true, query: '?url&no-inline', import: 'default' })
 const pngFiles = import.meta.glob<string>(['./items/png/*.png', '!./items/png/gokufase*.png', '!./items/png/naruto*.png'],
   { eager: true, query: '?url&no-inline', import: 'default' })
@@ -60,11 +62,15 @@ function iconSources(svg: string, png = svg) {
 
 export const itemIcons: ReadonlyMap<string, { svg?: string; png?: string }> = new Map([
   ...Object.entries(iconFiles).map(([id, file]) => [id, iconSources(file)] as const),
+  ...itemIconTargets.map(({ id }) => [id, iconSources(id)] as const),
   ...Array.from(fusionArt, ([id, { file }]) => [id, iconSources(id, file)] as const),
 ])
 
+export const pixelItemIcons: ReadonlySet<string> = new Set(itemIconTargets.map(({ id }) => id))
+
 export function itemIconSource(id: string, failed: ReadonlySet<string>, customPng?: string) {
   const icon = itemIcons.get(id)
+  if (pixelItemIcons.has(id)) return [icon?.png, customPng, icon?.svg].find((src) => src && !failed.has(src))
   const sources = fusionArt.has(id) ? [icon?.png, icon?.svg] : [icon?.svg, icon?.png]
   return [...sources, customPng].find((src) => src && !failed.has(src))
 }
