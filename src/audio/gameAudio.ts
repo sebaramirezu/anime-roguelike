@@ -1,11 +1,11 @@
-import type { CombatUpdate } from '../adapters/gameEngineAdapter'
+import type { CombatSpeed, CombatUpdate } from '../adapters/gameEngineAdapter'
 import { CombatSoundCursor } from './events'
 import { MusicPlayer, musicTrack } from './musicPlayer'
 import type { MusicScene } from './musicCatalog'
 import { channelVolume, soundChannels, type SoundChannel, type SoundPreferences } from './preferences'
 import { cuePriority, makeNoise, playSynthetic, type SoundCue } from './synth'
 
-type Voice = { channel: SoundChannel; priority: number; stop: () => void }
+type Voice = { channel: SoundChannel; cue: SoundCue; priority: number; stop: () => void }
 type Graph = {
   context: AudioContext
   master: GainNode
@@ -57,7 +57,7 @@ export class GameAudio {
     this.preferences = preferences
     this.applyMix()
     for (const voice of this.voices) {
-      if (!this.plays(voice.channel)) this.stopVoice(voice)
+      if (!this.plays(voice.channel) || (voice.cue === 'bossPhase' && !preferences.intenseEffects)) this.stopVoice(voice)
     }
     if (!this.plays('music')) this.graph?.music.stop()
     else this.syncMusic()
@@ -82,14 +82,26 @@ export class GameAudio {
     this.setScene(scene)
   }
 
-  combatUpdate(update: CombatUpdate) {
+  combatUpdate(update: CombatUpdate, speed: CombatSpeed = 1) {
     const outcome = update.status === 'finished' ? update.report.outcome : undefined
     const wantsTrack = outcome && outcome !== 'timeout' && this.plays('music') && musicTrack(outcome) !== null
     const cues = this.cursor.read(update, !wantsTrack)
     if (outcome) this.setScene(outcome === 'timeout' ? null : outcome)
-    const ranked = cues.map((cue, order) => ({ cue, order }))
+    if (!outcome && this.preferences.intenseEffects && cues.includes('bossPhase')) {
+      if (this.plays('music') && this.scene === 'major') {
+        if (musicTrack('majorPhase')) this.setScene('majorPhase')
+        else this.graph?.music.emphasizePhase()
+      }
+      if (this.plays('combat')) {
+        for (const voice of this.voices) if (voice.channel === 'combat') this.stopVoice(voice)
+        this.cue('bossPhase', 'combat')
+        return
+      }
+    }
+    const distinct = speed === 2 ? Array.from(new Set(cues)) : cues
+    const ranked = distinct.filter((cue) => cue !== 'bossPhase').map((cue, order) => ({ cue, order }))
       .sort((a, b) => cuePriority(b.cue) - cuePriority(a.cue) || a.order - b.order)
-      .slice(0, maxCuesPerSnapshot)
+      .slice(0, speed === 2 ? 2 : maxCuesPerSnapshot)
     ranked.sort((a, b) => a.order - b.order).forEach(({ cue }) => this.cue(cue, 'combat'))
   }
 
@@ -103,7 +115,7 @@ export class GameAudio {
       if (!lowest || lowest.priority >= priority) return
       this.stopVoice(lowest)
     }
-    const voice: Voice = { channel, priority, stop: () => {} }
+    const voice: Voice = { channel, cue, priority, stop: () => {} }
     try {
       voice.stop = playSynthetic(graph.context, graph.channels[channel], graph.noise, cue, () => this.voices.delete(voice))
       this.voices.add(voice)

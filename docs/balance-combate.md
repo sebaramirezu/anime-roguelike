@@ -1,5 +1,147 @@
 # Balance de combate y recursos de Anime Roguelike
 
+## Rareza fija de tienda
+
+La [configuración de tienda](../src/data/shopStock.ts) usa los mismos pesos para ambos héroes en cada generación de stock. Los niveles 1 a 5 tienen pesos **40, 35, 20, 4 y 1**. El sorteo forma cuatro casillas con boletos espaciados y baraja su posición. La probabilidad marginal de cada nivel por casilla coincide con su peso activo. Las rarezas dentro de un lote están correlacionadas. La franja de nivel 5 solo admite un boleto, por lo que pueden aparecer cero o un objeto de ese nivel por lote.
+
+Primero se comprueba la elegibilidad del catálogo. Hasta **mundo 2, etapa 7**, las dos campañas carecen de objetos vendibles de nivel 5. Los pesos activos se dividen por 99 y quedan en **40,4040%, 35,3535%, 20,2020%, 4,0404% y 0%**. Desde esa etapa entra el ingrediente básico y se aplica la tabla completa. En **mundo 4, etapa 6** entra el ingrediente avanzado. Ambos comparten el mismo 1% de nivel 5 y se eligen con el mismo peso cuando los dos son elegibles. Los mundos especiales también usan el sorteo vigente. Su presupuesto de oro sigue las reglas existentes.
+
+La semilla se genera al iniciar una expedición nueva y se guarda junto con el lote. Los guardados anteriores conservan sus objetos y ofertas válidas. La carga repara las ofertas que incumplan el desbloqueo o la restricción de un ingrediente mítico por lote. Los objetos de fusión de nivel 6 se obtienen con las recetas existentes.
+
+### Probabilidad configurada y frecuencia medida
+
+Se muestrearon **1.507.328 lotes** y **6.029.312 casillas**, con 2.048 semillas y ocho lotes distintos por etapa en cada campaña. La tabla muestra porcentajes por casilla en orden N1–N5. Las cifras coincidieron entre héroes al ejecutar las mismas semillas. El promedio del mundo 2 combina seis etapas con el nivel 5 bloqueado y seis con el ingrediente básico habilitado.
+
+| Mundo | Lotes por campaña | Esperado según elegibilidad · N1 / N2 / N3 / N4 / N5 | Medido · N1 / N2 / N3 / N4 / N5 |
+| --- | ---: | --- | --- |
+| 1 | 196.608 | 40,40 / 35,35 / 20,20 / 4,04 / 0,00 | 40,36 / 35,38 / 20,21 / 4,05 / 0,00 |
+| 2 | 196.608 | 40,20 / 35,18 / 20,10 / 4,02 / 0,50 | 40,19 / 35,19 / 20,10 / 4,04 / 0,49 |
+| 3 | 81.920 | 40,00 / 35,00 / 20,00 / 4,00 / 1,00 | 40,02 / 34,98 / 20,01 / 3,99 / 1,00 |
+| 4 | 196.608 | 40,00 / 35,00 / 20,00 / 4,00 / 1,00 | 39,97 / 35,03 / 19,97 / 4,01 / 1,02 |
+| 5 | 81.920 | 40,00 / 35,00 / 20,00 / 4,00 / 1,00 | 40,02 / 34,98 / 20,01 / 3,99 / 1,00 |
+
+Con el ingrediente básico como único elegible, apareció en **3,98% de los lotes**. Con ambos elegibles, el básico apareció en **2,02%** y el avanzado en **2,05%**. El **71,61%** de los grupos de ocho lotes con ambos elegibles quedó sin ninguna pieza mítica. Se registraron cero ofertas bloqueadas, cero objetos de nivel 6 y cero lotes con ambas piezas.
+
+### Campañas, fusiones y coste observado
+
+Se jugaron **1.024 expediciones** con 128 semillas por héroe y estrategia, usando las ofertas visibles, el gasto de oro, la colocación de piezas y el motor real. Las dos estrategias normales omitieron la compra de ingredientes míticos. Las dos estrategias de búsqueda ajustaron la reserva de oro mientras quedaban ingredientes por conseguir. Las cifras cuentan ejecuciones de estas estrategias.
+
+| Héroe | Plan | Campañas completas | Llegaron a mundo 4, etapa 6 | Compraron ambas piezas | Equiparon la fusión mítica |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Goku | Fusiones | 123/128 | 123 | 0 | 0 |
+| Goku | Defensa | 123/128 | 123 | 0 | 0 |
+| Goku | Priorizar mítica | 121/128 | 122 | 8 | 4 |
+| Goku | Defensa antes de la mítica | 74/128 | 93 | 7 | 5 |
+| Naruto | Fusiones | 97/128 | 97 | 0 | 0 |
+| Naruto | Defensa | 94/128 | 94 | 0 | 0 |
+| Naruto | Priorizar mítica | 94/128 | 95 | 6 | 3 |
+| Naruto | Defensa antes de la mítica | 56/128 | 76 | 8 | 7 |
+
+En las **437 campañas ganadas con los planes normales**, las fusiones de nivel 2, 3 y 4 se produjeron respectivamente en **395, 414 y 391** expediciones. Entre ellas hubo Báculo Energizado, Doble Ráfaga de Ki y Báculo Kaioken en Goku, y Kunais Gemelos, Kunais de las Sombras y Clones del Kyubi en Naruto.
+
+| Fusión equipada | Éxitos sobre 256 búsquedas | Renovaciones de búsqueda · mín. / mediana / máx. | Oro de piezas y búsqueda · mín. / mediana / máx. |
+| --- | ---: | ---: | ---: |
+| Migatte no Gokui | 9 | 4 / 12 / 24 | 64 / 96 / 144 |
+| Modo Barión | 10 | 4 / 13 / 24 | 64 / 100 / 144 |
+
+El coste incluye las dos piezas de 24 de oro y las renovaciones pagadas de 4 de oro durante la búsqueda. Se calcula sobre las búsquedas que acabaron con la fusión equipada y suma gastos de distintos mundos. Algunos planes compraron ambas piezas y conservaron una en la bandeja con su estrategia de colocación. Con la semilla **3**, el plan que prioriza la mítica equipó ambas formas en el **mundo 4, etapa 6**, por **64 de oro** en cada campaña, y completó las 46 etapas.
+
+Los perfiles de enemigos y los resultados de los diez jefes, incluidos los 120 duelos de referencia y la matriz de preparación, coincidieron con la medición previa. Build, lint y **306 pruebas** aprobadas.
+
+```powershell
+node scripts/simulate-combat.mjs --shop-audit --bosses --boss-preparation --purchase-routes
+```
+
+## Velocidad, Migatte y acceso a míticas
+
+Las cifras de esta sección registran la calibración anterior de tienda. La rareza y los costes vigentes están documentados arriba.
+
+El control de la arena empieza en **×1** en una expedición nueva. Conserva la velocidad elegida mientras la expedición está abierta. El adaptador sondea el reloj cada 50 ms y ejecuta únicamente pasos canónicos de 100 ms simulados. En ×1 reúne el tiempo de dos sondeos y en ×2 ejecuta un paso por sondeo. Cambiar de velocidad conserva el tiempo fraccionario pendiente. Los cuadros, las poses, los proyectiles, las auras y las transiciones visuales usan la velocidad de combate. La música y el ambiente de fondo mantienen su ritmo. En ×2 se priorizan hasta dos efectos sonoros distintos por actualización.
+
+La prueba con Cell, escudos y Migatte compara todas las actualizaciones a ×1, a ×2 y en una ejecución ×1 → ×2 → ×1. Coinciden los impactos y el orden de eventos, la vida final, la absorción, la duración simulada y las activaciones de Migatte y de la fase de Cell. El tiempo de reloj de ×2 es la mitad en la prueba.
+
+### Daño heredado
+
+| Técnica | Golpe base al nivel 1 | Intervalo | DPS bruto |
+| --- | ---: | ---: | ---: |
+| Genkidama | 126 | 3,65 s | 34,52 |
+| Genkidama concentrada | 110 | 3,075 s | 35,77 |
+| Migatte, técnicas heredadas | 126 y 110 | 3,65 y 3,075 s | **70,29** |
+| Migatte, técnicas durante la transformación | 195,3 y 170,5 | 3,65 y 3,075 s | **108,95** |
+
+Las Genkidamas carecen de golpes extra o mejoras de daño propias. El mismo resultado de fusión ejecuta ambas técnicas visibles con sus recargas originales en cinco casillas. Las dos armas originales ocupan diez. La mejora de daño de Migatte sigue siendo del 55% y la guardia temporal del 35%, ambas durante 11 s por debajo del 48% de vida. Dos copias equipadas conservan un solo conjunto de técnicas y una sola activación por combate. El escalado de nivel, las recargas pasivas y la mitigación siguen sus reglas habituales.
+
+Modo Barión conserva su ráfaga de siete segundos con +90% de daño y −24% de recarga. Afecta a las armas equipadas. Sus ingredientes siguen teniendo 98 de daño cada 2,9 s y 90 + 19 de daño cada 2,95 s, respectivamente, para **70,74 DPS brutos** cuando se usan juntos al nivel 1.
+
+### Cuándo salen y cuánto cuestan
+
+| Campaña | Primer ingrediente | Desbloqueo | Segundo ingrediente | Desbloqueo |
+| --- | --- | --- | --- | --- |
+| Goku | Genkidama (`spirit-bomb`) | Mundo 2, etapa 7 · 19/46 | Genkidama concentrada (`focused-spirit-bomb`) | Mundo 4, etapa 6 · 35/46 |
+| Naruto | Rasenshuriken (`rasenshuriken`) | Mundo 2, etapa 7 · 19/46 | Rasenshuriken de Kurama (`kurama-rasenshuriken`) | Mundo 4, etapa 6 · 35/46 |
+
+La tienda es determinista. Por ingrediente elegible se comprobó **1 de 8 lotes** en el ciclo de rotación, un 12,5% si se toman sus ocho posiciones con el mismo peso. Cuando ambos son elegibles, **2 de 8** lotes contienen alguno y **0 de 8** contienen los dos. El inicio de campaña y todas las renovaciones de la segunda tienda excluyen ambos ingredientes. Los mundos especiales 3 y 5 tampoco los ofrecen porque no hay oro utilizable en sus etapas intermedias y el cambio de mundo reinicia la reserva.
+
+Cada arma cuesta 24 de oro y renovar cuesta 4. Desde un lote sin comprar, siete renovaciones recorren las ocho posiciones. Un ingrediente cuesta como máximo 52 de oro contando la búsqueda. En el mundo 4 se pueden obtener ambos desde sus dos posiciones distintas por hasta 76 de oro si se llega a la etapa 12 con los 77 de oro que se ganan al ahorrar las victorias previas. La reserva no requiere una moneda ni una recompensa nueva. Las recetas míticas son la única vía de obtención de su resultado en una expedición nueva. Los guardados antiguos conservan los objetos ya adquiridos y sustituyen las ofertas legendarias que ya no sean válidas.
+
+### Rutas observadas
+
+Se simularon 40 expediciones, cinco planes de compra por héroe con 0, 1, 2 y 3 renovaciones de apertura. Las ocho rutas por héroe que buscaban los materiales compraron ambos en cuatro casos por campaña. Goku fabricó Migatte en cuatro de ocho intentos y Naruto fabricó Barión en dos de ocho. En los dos casos adicionales de Naruto el segundo objeto quedó en la bandeja con la colocación de esa ruta. Son resultados de esos planes deterministas y del método de colocación, no tasas de jugadores.
+
+| Héroe | Plan con 0 renovaciones iniciales | Compra básica · mundo–etapa | Compra avanzada · mundo–etapa | Renovaciones de búsqueda | Oro de ingredientes y búsqueda | Fusión equipada | Jefe final · tiempo y HP |
+| --- | --- | --- | --- | ---: | ---: | --- | --- |
+| Goku | Priorizar mítico | 2–7 | 4–6 | 2 | 56 | 4–6 | 32,06 s / 1.408,4 HP |
+| Goku | Comprar defensa antes | 2–12 | 4–11 | 14 | 104 | 4–11 | 32,06 s / 1.141,82 HP |
+| Naruto | Priorizar mítico | 2–7 | 4–6 | 3 | 60 | 4–6 | 47,82 s / 355,71 HP |
+| Naruto | Comprar defensa antes | 4–7 | 4–12 | 7 | 76 | Material en bandeja | 36,88 s / 1.000,49 HP |
+
+Las rutas de fusiones y defensa del conjunto habitual completaron ambas campañas sin míticas, con ocho victorias de expedición entre las 18 rutas medidas. Para pasar los jefes de apertura, estas rutas usaron fusiones accesibles como Báculo Kaioken y Doble Ráfaga de Ki en Goku o Rasengan del Kyubi en Naruto.
+
+### Duelos de las transformaciones
+
+Se probaron ocho configuraciones contra los cinco jefes de cada campaña. Los duelos de los mundos 1–3 con una mítica equipada representan pruebas de capacidad de combate. En la tienda de una partida nueva la forma solo se puede obtener a partir del mundo 4. V indica victoria y D derrota. Los valores son segundos del motor.
+
+| Jefe | Ambas armas sueltas | Fusión y apoyo | Ofensiva | Defensiva | Inicial + forma | Sin forma | Ofensiva al 55% | Defensiva al 55% |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Piccolo | D 41,6 | V 42,04 | V 23,13 | V 43,5 | V 27,68 | D 40,7 | V 19,52 | V 38,53 |
+| Vegeta | D 35,16 | D 36,9 | V 24,08 | V 46,33 | D 27,53 | D 35,3 | V 20,14 | D 43,09 |
+| Freezer | D 34,87 | D 34,89 | V 23,79 | V 46,33 | D 25,74 | D 35,16 | V 20,14 | D 41,66 |
+| Cell | D 37,2 | D 37,2 | V 28,64 | V 54,82 | D 27,9 | D 37,2 | D 24,8 | D 43,4 |
+| Majin Buu | D 40,15 | D 43,8 | V 33,6 | V 68,75 | D 32,85 | D 40,15 | D 25,55 | D 46,4 |
+| Zabuza | D 39 | D 45,6 | V 38,02 | V 42,03 | D 31,2 | D 39 | D 23,4 | V 32,09 |
+| Orochimaru | D 35,2 | D 37,6 | D 35,2 | V 43,11 | D 28,2 | D 35,2 | D 22,4 | D 41,6 |
+| Gaara | D 37,57 | D 38,4 | D 37,06 | V 46,47 | D 25,6 | D 37,5 | D 22,04 | D 40,16 |
+| Itachi | D 36,46 | D 40,8 | D 35,9 | V 44,8 | D 27,2 | D 39,54 | D 20,52 | D 38,61 |
+| Pain | D 40,15 | D 40,15 | D 36,13 | V 53,98 | D 29,2 | D 40,15 | D 22,8 | D 38,57 |
+
+En los jefes finales, el DPS bruto sostenido se calcula antes de armadura y mejoras temporales. El DPS efectivo incluye la absorción del escudo enemigo y usa el tiempo del motor. La ventana mítica se mide con los tiempos exactos de los impactos desde la activación hasta su expiración o el final del duelo.
+
+| Jefe | Configuración | DPS bruto | DPS efectivo total | DPS en ventana mítica | Daño a HP | Daño a escudo | HP propio final | Resultado |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Majin Buu | Ingredientes | 107,2 | 81,07 | — | 3.096,83 | 158 | 0 | D |
+| Majin Buu | Fusión | 107,2 | 89,54 | 106,39 | 3.763,77 | 158 | 0 | D |
+| Majin Buu | Ofensiva | 206,5 | 184,34 | 219,88 | 6.035,04 | 158 | 420,99 | V |
+| Majin Buu | Defensiva | 116,52 | 90,08 | 106,39 | 6.035,04 | 158 | 135,57 | V |
+| Majin Buu | Inicial | 157,33 | 137,12 | 177,35 | 4.346,26 | 158 | 0 | D |
+| Majin Buu | Ofensiva al 55% | 206,5 | 196,84 | 211,62 | 4.871,37 | 158 | 0 | D |
+| Majin Buu | Defensiva al 55% | 116,52 | 99,29 | 122,93 | 4.449,01 | 158 | 0 | D |
+| Pain | Ingredientes | 107,92 | 82,51 | — | 3.154,59 | 158 | 0 | D |
+| Pain | Fusión | 0 | 0 | 0 | 0 | 0 | 0 | D |
+| Pain | Ofensiva | 104,02 | 105,5 | 199,72 | 3.653,24 | 158 | 0 | D |
+| Pain | Defensiva | 119,2 | 105,55 | 188,18 | 5.540 | 158 | 255,29 | V |
+| Pain | Inicial | 49,67 | 47,36 | 82,51 | 1.224,82 | 158 | 0 | D |
+| Pain | Ofensiva al 55% | 104,02 | 120,01 | 175,99 | 2.578,14 | 158 | 0 | D |
+| Pain | Defensiva al 55% | 119,2 | 118,37 | 211,9 | 4.407,78 | 158 | 0 | D |
+
+Los diez topes de derrota para las builds insuficientes se volvieron a verificar. Las 40 builds A/B perdieron. Los 100 duelos de referencia que no incluyen Migatte y los perfiles de enemigos coincidieron con la medición anterior. Una mochila inicial con Migatte vence a Piccolo en la prueba hipotética y pierde ante los cuatro jefes posteriores. Contra Cell y Majin Buu, las dos configuraciones de Migatte que entraron con el 55% de vida perdieron. La defensa de Naruto ganó a Pain con 255 HP a vida completa y perdió al 55%.
+
+```powershell
+node scripts/simulate-combat.mjs --bosses --purchase-routes
+node scripts/simulate-combat.mjs --boss-preparation --purchase-routes --mythic-audit
+```
+
+Build y lint pasaron con **303 pruebas**. Edge comprobó el cambio ×1 → ×2 → ×1 y el sprite de Migatte a 1280 y 390 px, con la música a velocidad normal. También comprobó la compra y la fusión desde la mochila, y ocho lotes consecutivos de la segunda tienda y del mundo 2 antes del desbloqueo.
+
 ## Preparación estratégica ante jefes
 
 Se conservaron las estadísticas y fases de los diez jefes. El aviso previo ahora muestra el rango, el nombre del enemigo, rasgos generales de ofensiva y defensa y la posibilidad de una fase fuerte. La mochila muestra la vida real al entrar, el escudo inicial, la armadura, los objetos equipados y cuándo se activa su curación. El nombre, el umbral y los efectos de la fase se descubren durante el combate.

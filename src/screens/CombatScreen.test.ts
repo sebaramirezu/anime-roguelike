@@ -120,11 +120,15 @@ it('shows the phase and aura from a resolved boss event and preserves the activa
     const active = updates.find(({ enemy }) => enemy?.bossPhase)!
     const events = new Map(updates.flatMap(({ recentEvents = [] }) => recentEvents.map((event) => [event.id, event] as const)))
     const transforms = [...events.values()].filter(({ kind, source }) => kind === 'transform' && source === 'enemy')
-    expect(transforms).toEqual([expect.objectContaining({ techniqueId: 'goku-majin-buu-phase', visual: { theme: 'baryon', special: true } })])
+    expect(transforms).toEqual([expect.objectContaining({
+      techniqueId: 'goku-majin-buu-phase', visual: { theme: 'baryon', special: true, bossPhase: true },
+    })])
     const html = render(active, boss)
     expect(html).toContain('Fase fuerte · Regeneración de Majin Buu')
     expect(html).toContain('data-boss-phase="Regeneración de Majin Buu"')
     expect(html).toContain('class="arena-aura" data-theme="baryon" data-side="enemy"')
+    expect(html).toContain('class="arena-phase-impact" data-motif="embers"')
+    expect(html).toContain('class="arena-phase-banner">Regeneración de Majin Buu')
     expect(html).toContain('class="arena-number arena-heal" data-side="enemy"')
     const finished = updates.at(-1)!
     expect(finished.status).toBe('finished')

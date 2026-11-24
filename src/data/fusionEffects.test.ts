@@ -111,18 +111,18 @@ describe('equipped fusion effects', () => {
     const inventory = placeItem(equipped(id), item(weapon), 'companion', [4, 1])
     const { definition } = playerLoadout(character satisfies CharacterId, createHeroProgress(character), inventory)
     const player = { ...definition, maxHealth: 1000, initialHealth: 479 }
-    const damage = definition.weapons[0].damage
+    const damage = definition.weapons.find(({ id }) => id === 'companion')!.damage
     const atThreshold = advanceCombat(createCombat({ player: { ...player, initialHealth: 480 }, enemy }), 0)
     expect(atThreshold.player.activeEffects).toHaveLength(0)
     const events: ResolvedAttack[] = []
     const first = advanceCombat(createCombat({ player, enemy }), 0, (event) => events.push(event))
-    expect(events[0].damage).toBeCloseTo(damage * (1 + boost / 100))
+    expect(events.find(({ weaponId }) => weaponId === 'companion')?.damage).toBeCloseTo(damage * (1 + boost / 100))
     expect(first.player.activeEffects).toMatchObject([{ kind: 'damageBoost', remainingMs: durationMs, sourceId: id },
       { kind: secondary, remainingMs: durationMs, sourceId: id }])
     expect(first.player.supports).toHaveLength(0)
     const after = advanceCombat(first, durationMs + 1200, (event) => events.push(event))
     expect(after.player.activeEffects).toHaveLength(0)
-    expect(events.at(-1)?.damage).toBe(damage)
+    expect(events.findLast(({ weaponId }) => weaponId === 'companion')?.damage).toBe(damage)
   })
 
   it('consumes only one mythic form even if two completed copies are equipped', () => {
@@ -130,10 +130,28 @@ describe('equipped fusion effects', () => {
     const { definition } = loadout('ultra-instinct', bag)
     expect(bag.items).toHaveLength(2)
     expect(definition.supports).toHaveLength(1)
+    expect(definition.weapons).toHaveLength(2)
     const activations: string[] = []
     const state = createCombat({ player: { ...definition, initialHealth: 450 }, enemy })
     const result = advanceCombat(state, 12_000, undefined, ({ name }) => activations.push(name))
     expect(activations).toEqual(['Migatte no Gokui'])
     expect(result.player.activeEffects).toEqual([])
+  })
+
+  it('inherits each Genkidama with its original cadence and applies passive recharge exactly once', () => {
+    const goku = createHeroProgress('goku')
+    const basic = loadout('spirit-bomb').definition.weapons[0]
+    const focused = loadout('focused-spirit-bomb').definition.weapons[0]
+    const expected = [basic, focused].map(({ damage, cooldownMs }) => ({ damage, cooldownMs }))
+    const { definition, techniqueIds } = loadout('ultra-instinct')
+    expect(definition.weapons.map(({ damage, cooldownMs }) => ({ damage, cooldownMs }))).toEqual(expected)
+    expect([...techniqueIds.values()]).toEqual(['spirit-bomb', 'focused-spirit-bomb'])
+    expect(definition.openingEffects).toEqual([])
+    const attacks: [number, number][] = []
+    advanceCombat(createCombat({ player: definition, enemy }), 3650, ({ damage }, elapsedMs) => attacks.push([elapsedMs, damage]))
+    expect(attacks).toEqual([[0, 126], [0, 110], [3075, 110], [3650, 126]])
+    const geared = placeItem(equipped('ultra-instinct'), item('swift-gloves'), 'gloves', [4, 1])
+    expect(playerLoadout('goku', goku, geared).definition.weapons.map(({ cooldownMs }) => cooldownMs))
+      .toEqual(expected.map(({ cooldownMs }) => cooldownMs * .92))
   })
 })

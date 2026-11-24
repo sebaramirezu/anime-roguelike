@@ -94,6 +94,7 @@ describe('bundled inventory art', () => {
     for (const { id } of gear) {
       const icon = itemIcons.get(id)!
       expect(icon.svg).toContain(`${id}.svg`)
+      expect(icon.png).toContain(`${id}.png`)
       const selected = itemIconSource(id, new Set())
       expect(selected).toBe(icon.png ?? icon.svg)
       expect(itemIconSource(id, new Set(['/item.png', ...(icon.png ? [icon.png] : [])]), '/item.png')).toBe(icon.svg)

@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import type { CombatSpeed } from '../../adapters/gameEngineAdapter'
 import { frameCount, frameSource, resolveClip, type Playback, type SpriteClip, type SpriteVisual } from './arenaVisuals'
 
 function useReducedMotion() {
@@ -13,25 +14,31 @@ function useReducedMotion() {
   return reduced
 }
 
-function SpriteFrames({ clip, failed, onFailure, reduced, atEnd, mark }: {
+function SpriteFrames({ clip, failed, onFailure, reduced, atEnd, mark, elapsedMs, speed }: {
   clip?: SpriteClip; failed: ReadonlySet<string>; onFailure: (src: string) => void
   reduced: boolean; atEnd: boolean; mark?: string
+  elapsedMs?: number; speed: CombatSpeed
 }) {
   const [index, setIndex] = useState(0)
   useEffect(() => {
-    if (!clip || clip.kind === 'png' || reduced || frameCount(clip) < 2) return
+    if (elapsedMs !== undefined || !clip || clip.kind === 'png' || reduced || frameCount(clip) < 2) return
     const count = frameCount(clip)
     let frame = 0
     const timer = window.setInterval(() => {
       frame = (frame + 1) % count
       setIndex(frame)
       if (!clip.loop && frame === count - 1) window.clearInterval(timer)
-    }, 1000 / Math.max(1, clip.fps))
+    }, 1000 / Math.max(1, clip.fps) / speed)
     return () => window.clearInterval(timer)
-  }, [clip, reduced])
+  }, [clip, reduced, elapsedMs, speed])
 
   const count = clip ? frameCount(clip) : 0
-  const frame = reduced ? atEnd ? count - 1 : 0 : index
+  let frame = index
+  if (reduced) frame = atEnd ? count - 1 : 0
+  else if (elapsedMs !== undefined && clip && clip.kind !== 'png' && count > 0) {
+    const elapsedFrames = Math.floor(elapsedMs * clip.fps / 1000)
+    frame = clip.loop ? elapsedFrames % count : Math.min(count - 1, elapsedFrames)
+  }
   const src = frameSource(clip, frame, failed)
   if (!clip || !src || count < 1) {
     return <span className="sprite-placeholder"><i /><b /><em />{mark && <small>{mark}</small>}</span>
@@ -53,29 +60,32 @@ function playbackDuration(visual: SpriteVisual, pose: Playback['pose']) {
     : poseDuration[pose]
 }
 
-export function AnimatedSprite({ visual, playback, facing = 'right' }: {
+export function AnimatedSprite({ visual, playback, facing = 'right', elapsedMs, speed = 1 }: {
   visual: SpriteVisual
   playback: Playback
   facing?: 'left' | 'right'
+  elapsedMs?: number
+  speed?: CombatSpeed
 }) {
   const reduced = useReducedMotion()
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set())
   const [finished, setFinished] = useState<string>()
-  const active = playback.pose === 'death' || finished !== playback.id
+  const duration = playbackDuration(visual, playback.pose)
+  const active = playback.pose === 'idle' || playback.pose === 'death'
+    || (elapsedMs === undefined ? finished !== playback.id : elapsedMs < duration)
   const pose = active ? playback.pose : 'idle'
   const clip = resolveClip(visual, pose, failed)
-  const duration = playbackDuration(visual, playback.pose)
   useEffect(() => {
-    if (playback.pose === 'idle' || playback.pose === 'death') return
-    const timer = window.setTimeout(() => setFinished(playback.id), duration)
+    if (elapsedMs !== undefined || playback.pose === 'idle' || playback.pose === 'death') return
+    const timer = window.setTimeout(() => setFinished(playback.id), duration / speed)
     return () => window.clearTimeout(timer)
-  }, [playback.id, playback.pose, duration])
+  }, [playback.id, playback.pose, duration, elapsedMs, speed])
 
   return <div className="animated-sprite" data-shape={visual.shape} data-facing={facing}
     style={{ '--sprite-light': visual.color, '--pose-duration': `${duration}ms` } as CSSProperties} aria-hidden="true">
     <div key={`${pose}-${playback.id}`} className="sprite-motion" data-pose={pose}
       data-pixel-art={clip?.kind === 'png' ? clip.pixelArt : undefined}>
-      <SpriteFrames clip={clip} failed={failed} reduced={reduced} atEnd={pose === 'death'} mark={visual.mark}
+      <SpriteFrames clip={clip} failed={failed} reduced={reduced} atEnd={pose === 'death'} mark={visual.mark} elapsedMs={elapsedMs} speed={speed}
         onFailure={(src) => setFailed((previous) => new Set([...previous, src]))} />
     </div>
   </div>

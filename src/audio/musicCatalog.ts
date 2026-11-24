@@ -4,6 +4,7 @@ export const musicCatalog = {
   normal: { stem: 'combate-normal', loop: true },
   minor: { stem: 'miniboss', loop: true },
   major: { stem: 'jefe-mayor', loop: true },
+  majorPhase: { stem: 'jefe-fase-fuerte', loop: true },
   victory: { stem: 'victoria', loop: false },
   defeat: { stem: 'derrota', loop: false },
 } as const

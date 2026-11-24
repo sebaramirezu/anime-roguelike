@@ -17,6 +17,11 @@ export function AudioControls({ settings, onChange, onPreview }: {
           onChange={(event) => onChange({ ...settings, enabled: event.currentTarget.checked })} />
         Audio activado
       </label>
+      <label className="audio-mute">
+        <input type="checkbox" checked={settings.intenseEffects}
+          onChange={(event) => onChange({ ...settings, intenseEffects: event.currentTarget.checked })} />
+        Efectos intensos de combate
+      </label>
       <label className="audio-slider">
         <span>Volumen general <output>{Math.round(settings.master * 100)}%</output></span>
         <input aria-label="Volumen general" type="range" min="0" max="100" value={Math.round(settings.master * 100)}

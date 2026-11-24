@@ -4,9 +4,8 @@ import { heroForms, kyubiChakra } from '../data/heroForms'
 import { items } from '../data/items'
 import { bossPhaseFor } from '../data/bossPhases'
 import { formatCombatAmount } from '../shared/formatCombatAmount'
-import type { CombatEvent, CombatReport, Combatant, GameEngineAdapter } from './gameEngineAdapter'
+import { combatStepMs, type CombatEvent, type CombatReport, type Combatant, type GameEngineAdapter } from './gameEngineAdapter'
 
-const combatTickMs = 100
 const itemNames = new Map(items.map(({ id, name }) => [id, name]))
 const effectNames = { damageBoost: 'Daño aumentado', cooldownReduction: 'Recarga acelerada', damageReduction: 'Guardia temporal' }
 const bonusHits = {
@@ -36,7 +35,7 @@ function combatantView(state: CombatantState, weaponNames: ReadonlyMap<string, s
 }
 
 export const liveCombat: GameEngineAdapter = {
-  startCombat({ character, stage, inventory, hero = createHeroProgress(character) }, publish, signal) {
+  startCombat({ character, stage, inventory, hero = createHeroProgress(character), readSpeed }, publish, signal) {
     if (signal.aborted) return
     if (stage.character !== character) throw new Error('La etapa no pertenece a la campaña del personaje.')
     const player = playerLoadout(character, hero, inventory)
@@ -79,7 +78,7 @@ export const liveCombat: GameEngineAdapter = {
       function record(event: Omit<CombatEvent, 'id' | 'tick'>) {
         events.push({ ...event, id: String(++eventId), tick: tickIndex })
       }
-      state = advanceCombat(state, combatTickMs, ({ source, weaponId, damage, absorbed = 0, lethal, critical, bonusHit }) => {
+      state = advanceCombat(state, combatStepMs, ({ source, weaponId, damage, absorbed = 0, lethal, critical, bonusHit }) => {
         const target = source === 'player' ? 'enemy' : 'player'
         const ability = source === 'enemy' ? enemyAbilities.get(weaponId) : undefined
         const weaponName = ability?.name ?? weaponNames.get(weaponId) ?? 'Ataque'
@@ -107,7 +106,7 @@ export const liveCombat: GameEngineAdapter = {
         if (healed > 0) record({ kind: 'heal', target, techniqueId, amount: healed, text: `${name} cura ${formatCombatAmount(healed)} de vida.` })
         if (buff && target === 'enemy' && phase && techniqueId === phaseId) {
           bossPhase = { name, seconds: elapsedMs / 1000 }
-          record({ kind: 'transform', source: 'enemy', target, techniqueId, visual: { theme: phase.theme, special: true },
+          record({ kind: 'transform', source: 'enemy', target, techniqueId, visual: { theme: phase.theme, special: true, bossPhase: true },
             text: `${stage.enemy.name} activa su fase fuerte · ${name}` })
         } else if (buff && target === 'player' && techniqueId === formId) {
           record({ kind: 'transform', source: 'player', target, techniqueId, text: `${name}: transformación activada.` })
@@ -126,7 +125,7 @@ export const liveCombat: GameEngineAdapter = {
         recentEvents = history.slice(history.findIndex(({ tick }) => tick === firstTick))
       }
       const snapshot = {
-        ...snapshotOf(), recentEvents,
+        ...snapshotOf(), recentEvents, tick: tickIndex,
       }
       const result = getCombatResult(state)
       if (!result) {
@@ -144,7 +143,14 @@ export const liveCombat: GameEngineAdapter = {
       } })
     }
     signal.addEventListener('abort', stop, { once: true })
-    timer = setInterval(tick, combatTickMs)
-    publish({ status: 'running', ...snapshotOf() })
+    const wallStepMs = combatStepMs / 2
+    let pendingMs = 0
+    timer = setInterval(() => {
+      pendingMs += wallStepMs * (readSpeed?.() ?? 1)
+      if (pendingMs < combatStepMs) return
+      pendingMs -= combatStepMs
+      tick()
+    }, wallStepMs)
+    publish({ status: 'running', tick: 0, ...snapshotOf() })
   },
 }

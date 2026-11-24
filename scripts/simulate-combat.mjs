@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 import { bossTrials } from './boss-trials.mjs'
+import { auditShop } from './shop-audit.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const includeHits = process.argv.includes('--hits')
@@ -86,24 +87,42 @@ try {
       dps: elapsedSeconds ? (health + shield) / elapsedSeconds : 0 }
   }
 
-  const matches = scenarios.map(([name, character, enemyId, ids]) => {
+  function simulateMatch([name, character, enemyId, ids, healthPercent = 100]) {
     const stageIndex = stagesFor(character).findIndex(({ enemy }) => enemy.id === enemyId)
     const stage = stagesFor(character)[stageIndex]
     const hero = heroAt(character, stageIndex)
     const { definition } = playerLoadout(character, hero, pack(ids, stage.level - 1))
-    const player = { ...definition, initialHealth: definition.maxHealth }
+    const player = { ...definition, initialHealth: definition.maxHealth * healthPercent / 100 }
     const enemy = enemyLoadout(stage)
     const hits = { player: [], enemy: [] }
     const support = []
     const result = engine.advanceCombat(engine.createCombat({ player, enemy }), 120_000,
-      (hit) => hits[hit.source].push(hit), (event) => support.push(event))
+      (hit, elapsedMs) => hits[hit.source].push({ ...hit, elapsedMs }), (event) => support.push(event))
     const seconds = result.elapsedMs / 1000
-    return { name, character, world: stage.level, stage: stage.number, level: hero.level, items: ids,
+    const transformation = support.find(({ techniqueId }) => techniqueId === 'ultra-instinct' || techniqueId === 'baryon-mode')
+    const form = transformation && player.supports.find(({ techniqueId }) => techniqueId === transformation.techniqueId)
+    const duration = form?.effects.find(({ kind }) => kind === 'damageBoost')?.durationMs
+    let transformationStats
+    if (transformation && duration) {
+      const start = transformation.elapsedMs
+      const end = Math.min(result.elapsedMs, start + duration)
+      const window = end - start
+      if (window > 0) {
+        const activeHits = hits.player.filter(({ elapsedMs }) => elapsedMs >= start
+          && (elapsedMs < end || (window < duration && elapsedMs === end)))
+        transformationStats = { from: start / 1000, seconds: window / 1000, ...summarize(activeHits, window / 1000) }
+      }
+    }
+    return { name, character, enemyId, world: stage.level, stage: stage.number, level: hero.level, items: ids, healthPercent,
       seconds, status: result.status, playerHp: result.player.health, enemyHp: result.enemy.health,
       playerMaxHp: player.maxHealth, enemyMaxHp: enemy.maxHealth,
       player: summarize(hits.player, seconds), enemy: summarize(hits.enemy, seconds), support,
+      sustainedRawDps: sum(player.weapons.map((weapon) =>
+        (weapon.damage + sum((weapon.bonusHits ?? []).map(({ damage }) => damage))) * 1000 / weapon.cooldownMs)),
+      ...(transformationStats && { transformation: transformationStats }),
       ...(includeHits ? { hits } : {}) }
-  })
+  }
+  const matches = scenarios.map(simulateMatch)
 
   const firstStages = new Map()
   for (const character of ['goku', 'naruto']) {
@@ -155,7 +174,54 @@ try {
   const bosses = process.argv.includes('--bosses') || includePreparation
     ? bossTrials({ engine, stagesFor, heroAt, enemyLoadout, playerLoadout, pack, effectsApi, fusionRecipes })
     : undefined
-  console.log(JSON.stringify({ enemies, weapons, matches, campaigns, bosses, purchaseRoutes }, null, 2))
+  let mythicAudit
+  if (process.argv.includes('--mythic-audit')) {
+    const { equipmentConfig } = await vite.ssrLoadModule('/src/data/equipmentSession.ts')
+    const { legendaryIngredients } = await vite.ssrLoadModule('/src/data/shopStock.ts')
+    const { simulateShopCampaign } = await vite.ssrLoadModule('/src/data/campaignSimulation.ts')
+    const { heroForms } = await vite.ssrLoadModule('/src/data/heroForms.ts')
+    mythicAudit = ['goku', 'naruto'].map((character) => {
+      const stages = stagesFor(character)
+      const ids = legendaryIngredients[character]
+      const form = heroForms[character]
+      const common = [character === 'goku' ? 'ki-barrier' : 'chakra-barrier', 'completo-italiano']
+      const offense = character === 'goku' ? ['kaioken-power-pole', 'double-ki-burst'] : ['kyubi-rasengan', 'shadow-kunai']
+      const defense = [character === 'goku' ? 'superior-saiyan-armor' : 'endurance-vest', 'guardian-bracers']
+      if (character === 'naruto') defense.push('kyubi-rasengan', 'kyubi-clones')
+      const cases = [
+        ['Ingredientes', [...common, ...ids]], ['Fusión', [...common, form]], ['Ofensiva', [...common, ...offense, form]],
+        ['Defensiva', [...common, ...defense, form]], ['Inicial', [...starters[character], form]],
+        ['Sin transformación', [...common, ...offense]], ['Ofensiva al 55%', [...common, ...offense, form], 55],
+        ['Defensiva al 55%', [...common, ...defense, form], 55],
+      ]
+      const encounters = stages.filter(({ enemy }) => enemy.kind === 'major').flatMap(({ enemy }) =>
+        cases.map(([name, gear, health]) => simulateMatch([name, character, enemy.id, gear, health])))
+      const paths = ['control', 'fusion', 'defense', 'mythic', 'lateMythic'].flatMap((route) =>
+        [0, 1, 2, 3].map((shopSeed) => {
+          const routeResult = simulateShopCampaign(character, route, 0, shopSeed)
+          const obtained = routeResult.purchases.filter(({ id }) => ids.includes(id))
+          const crafted = routeResult.stages.find(({ items }) => items.includes(form))
+          const last = routeResult.stages.at(-1)
+          return { route, shopSeed, obtained, sightings: routeResult.sightings, crafted: crafted?.id,
+            mythicRefreshes: routeResult.mythicRefreshes,
+            cost: sum(obtained.map(({ price }) => price)) + routeResult.mythicRefreshes * equipmentConfig.refreshPrice,
+            completed: routeResult.stages.filter(({ outcome }) => outcome === 'victory').length,
+            last: { enemy: last.enemy, outcome: last.outcome, hp: last.hp, seconds: last.seconds } }
+        }))
+      const profiles = ids.map((id) => weapons.find((weapon) => weapon.id === id))
+      const fused = playerLoadout(character, engine.createHeroProgress(character), pack([form], 0)).definition
+      return { character, ids, form, profiles, inheritedDps: sum(fused.weapons.map(({ damage, cooldownMs }) => damage * 1000 / cooldownMs)),
+        paths, encounters }
+    })
+  }
+  let shopAudit
+  if (process.argv.includes('--shop-audit')) {
+    const { equipmentConfig } = await vite.ssrLoadModule('/src/data/equipmentSession.ts')
+    const { simulateShopCampaign } = await vite.ssrLoadModule('/src/data/campaignSimulation.ts')
+    const stock = await vite.ssrLoadModule('/src/data/shopStock.ts')
+    shopAudit = auditShop({ stagesFor, items, stock, simulateShopCampaign, equipmentConfig })
+  }
+  console.log(JSON.stringify({ enemies, weapons, matches, campaigns, bosses, purchaseRoutes, mythicAudit, shopAudit }, null, 2))
 } finally {
   await vite.close()
 }

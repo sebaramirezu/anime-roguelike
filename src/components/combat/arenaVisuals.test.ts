@@ -10,7 +10,9 @@ import { heroSprites } from '../../assets/heroSprites'
 import { stagesFor } from '../../data/levels'
 import { advanceCombat, createCombat } from '../../engine'
 import { AnimatedSprite } from './AnimatedSprite'
+import { sceneryFor } from './arenaScenery'
 import { CombatArena } from './CombatArena'
+import { bossPhaseVisuals } from './bossPhaseVisuals'
 import { arenaImpacts, arenaPlayback, assetPath, enemySprite, enemyVisual, frameCount, frameSource, heroVisual, resolveClip, type SpriteClip } from './arenaVisuals'
 
 const empty = new Set<string>()
@@ -22,6 +24,22 @@ const hit: CombatEvent = { id: '2', kind: 'damage', source: 'player', target: 'e
 const attack: CombatEvent = { id: '1', kind: 'attack', source: 'player', target: 'enemy', techniqueId: 'kamehameha', text: 'Kamehameha' }
 
 describe('arena visual assets', () => {
+  it('selects bundled pixel backgrounds for the real 92 stages, including bridge and Cell overrides', () => {
+    const naruto = stagesFor('naruto')
+    const backgrounds = [...stages, ...naruto].map(sceneryFor)
+    expect(backgrounds).toHaveLength(92)
+    expect(new Set(backgrounds.map(({ id }) => id)).size).toBe(10)
+    for (const { id, url } of backgrounds) expect(url).toContain(`backgrounds/${id}.png`)
+    expect(sceneryFor(stages.find(({ enemy }) => enemy.id === 'goku-dodoria')!).id).toBe('saiyan-rocks')
+    expect(sceneryFor(stages.find(({ enemy }) => enemy.id === 'goku-freezer')!).id).toBe('namek')
+    expect(sceneryFor(stages.find(({ enemy }) => enemy.id === 'goku-android-19')!).id).toBe('android-outskirts')
+    expect(sceneryFor(stages.find(({ enemy }) => enemy.id === 'goku-cell')!).id).toBe('cell-ring')
+    expect(sceneryFor(naruto.find(({ enemy }) => enemy.id === 'naruto-haku')!).id).toBe('zabuza-bridge')
+    expect(sceneryFor(naruto.find(({ enemy }) => enemy.id === 'naruto-zabuza')!).id).toBe('zabuza-bridge')
+    expect(sceneryFor(naruto.find(({ enemy }) => enemy.id === 'naruto-gaara')!).id).toBe('hidden-leaf')
+    expect(sceneryFor(naruto.at(-1)!).id).toBe('pain-ruins')
+  })
+
   it('resolves both heroes and all existing encounters without changing enemy identifiers', () => {
     expect(heroVisual('goku').folder).not.toBe(heroVisual('naruto').folder)
     expect(stages.map((stage) => enemyVisual(stage).folder)).toContain('enemies/goku/raditz')
@@ -136,6 +154,41 @@ describe('arena visual assets', () => {
 })
 
 describe('arena event playback', () => {
+  it('puts the active speed switch above the battlefield and locks it in the result', () => {
+    const props = { stage: stages[0], hero: 'goku' as const, leftHud: '', rightHud: '', events: [], onToggleSpeed() {} }
+    const initial = renderToStaticMarkup(createElement(CombatArena, props))
+    const fast = renderToStaticMarkup(createElement(CombatArena, { ...props, speed: 2, outcome: 'victory' }))
+    expect(initial.indexOf('arena-speed')).toBeLessThan(initial.indexOf('arena-2d'))
+    expect(initial).toContain('aria-pressed="false"')
+    expect(initial).toContain('Velocidad ×1')
+    expect(fast).toContain('aria-pressed="true"')
+    expect(fast).toContain('Velocidad ×2')
+    expect(fast).toContain('disabled=""')
+  })
+
+  it('renders one boss-specific phase accent for each marked activation and none for ordinary specials', () => {
+    const bosses = [...stages, ...stagesFor('naruto')].filter(({ enemy }) => enemy.kind === 'major')
+    const palettes = new Set<string>()
+    for (const stage of bosses) {
+      const visual = bossPhaseVisuals[stage.enemy.id]!
+      expect(visual).toBeDefined()
+      palettes.add(`${visual.color}/${visual.accent}`)
+      const phase = { id: 'phase', tick: 1, kind: 'transform', target: 'enemy', source: 'enemy',
+        text: 'Fase fuerte', visual: { theme: 'ki', special: true, bossPhase: true } } as const
+      const props = { stage, hero: stage.character, intenseEffects: false, leftHud: '', rightHud: '' }
+      const neutral = renderToStaticMarkup(createElement(CombatArena, { ...props, events: [{ ...attack, tick: 1 }] }))
+      const html = renderToStaticMarkup(createElement(CombatArena, { ...props, bossPhase: phase.text,
+        events: [{ ...attack, tick: 1 }, phase] }))
+      expect(neutral).not.toContain('arena-phase-impact')
+      expect(html.match(/class="arena-phase-impact"/g)).toHaveLength(1)
+      expect(html).not.toContain('arena-special-impact')
+      expect(html).toContain(`data-motif="${visual.motif}"`)
+      expect(html).toContain('data-intense-effects="off"')
+      expect(html).toContain('class="arena-phase-banner">Fase fuerte')
+    }
+    expect(palettes.size).toBe(10)
+  })
+
   it('reacts to a hit fully absorbed by shield even when the fighter loses no HP', () => {
     const events: CombatEvent[] = [attack, { ...hit, kind: 'shield', amount: 14 }]
     expect(arenaPlayback(events, 'enemy')).toEqual({ id: '2', pose: 'hurt' })

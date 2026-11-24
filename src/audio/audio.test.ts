@@ -203,6 +203,65 @@ describe('music and mixing', () => {
     audio.dispose()
   })
 
+  it('plays one priority cue for a phase event, ducks without replacing the track, and honors the effects preference', async () => {
+    installAudioStubs()
+    vi.spyOn(synth, 'makeNoise').mockReturnValue({} as AudioBuffer)
+    const stop = vi.fn()
+    const played = vi.spyOn(synth, 'playSynthetic').mockReturnValue(stop)
+    const musicAccent = vi.spyOn(MusicPlayer.prototype, 'emphasizePhase')
+    const audio = new GameAudio(defaultSoundPreferences)
+    audio.beginEncounter('major')
+    await audio.unlock()
+    audio.cue('hit', 'combat')
+    const phase = event('1', 'transform', 'enemy', { source: 'enemy', visual: { theme: 'ki', bossPhase: true } })
+    const attack = event('2', 'attack', 'player', { source: 'enemy' })
+    audio.combatUpdate(running([phase, attack]))
+    audio.combatUpdate(running([{ ...phase }, attack]))
+    expect(played.mock.calls.map((call) => call[3])).toEqual(['hit', 'bossPhase'])
+    expect(stop).toHaveBeenCalledOnce()
+    expect(musicAccent).toHaveBeenCalledOnce()
+
+    audio.setPreferences({ ...defaultSoundPreferences, intenseEffects: false })
+    expect(stop).toHaveBeenCalledTimes(2)
+    audio.beginEncounter('major')
+    audio.combatUpdate(running([phase, attack]))
+    expect(played.mock.calls.map((call) => call[3])).toEqual(['hit', 'bossPhase', 'physical'])
+    expect(musicAccent).toHaveBeenCalledOnce()
+    audio.dispose()
+  })
+
+  it('briefly changes the gain of the current boss track and can crossfade to an installed phase track', async () => {
+    const { gains, media } = installAudioStubs()
+    const context = new AudioContext()
+    const player = new MusicPlayer(context, context.createGain(), { major: 'jefe-mayor.mp3', majorPhase: 'jefe-fase-fuerte.ogg' })
+    player.select('major')
+    await Promise.resolve()
+    player.emphasizePhase()
+    expect(gains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.56, 1.12)
+    expect(gains[1].gain.linearRampToValueAtTime).toHaveBeenCalledWith(1, 1.85)
+    expect(media).toHaveLength(1)
+    expect(media[0].play).toHaveBeenCalledOnce()
+    player.select('majorPhase')
+    player.select('majorPhase')
+    expect(media).toHaveLength(2)
+    expect(media[1].src).toContain('jefe-fase-fuerte.ogg')
+    player.stop()
+  })
+
+  it('keeps two distinct prioritized combat sounds per accelerated snapshot', async () => {
+    installAudioStubs()
+    vi.spyOn(synth, 'makeNoise').mockReturnValue({} as AudioBuffer)
+    const played = vi.spyOn(synth, 'playSynthetic').mockReturnValue(() => {})
+    const audio = new GameAudio(defaultSoundPreferences)
+    await audio.unlock()
+    audio.combatUpdate(running([
+      event('1', 'attack', 'enemy'), event('2', 'damage', 'enemy'), event('3', 'damage', 'enemy'),
+      event('4', 'heal', 'player'), event('5', 'damage', 'player', { critical: true }),
+    ]), 2)
+    expect(played.mock.calls.map((call) => call[3])).toEqual(['hit', 'criticalTaken'])
+    audio.dispose()
+  })
+
   it('drops low-priority voices under load and reserves room for a finishing cue', async () => {
     installAudioStubs()
     vi.spyOn(synth, 'makeNoise').mockReturnValue({} as AudioBuffer)
@@ -224,10 +283,10 @@ describe('audio preferences', () => {
     const values = new Map<string, string>()
     vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key), setItem: (key: string, value: string) => values.set(key, value) })
     expect(loadSoundPreferences()).toEqual(defaultSoundPreferences)
-    const preferences = { ...defaultSoundPreferences, master: .6, muted: { ...defaultSoundPreferences.muted, music: true } }
+    const preferences = { ...defaultSoundPreferences, intenseEffects: false, master: .6, muted: { ...defaultSoundPreferences.muted, music: true } }
     saveSoundPreferences(preferences)
     expect(loadSoundPreferences()).toEqual(preferences)
     values.set(audioStorageKey, JSON.stringify({ master: 9, volume: { combat: -1, interface: 'bad' }, enabled: false }))
-    expect(loadSoundPreferences()).toMatchObject({ enabled: false, master: 1, volume: { music: .25, combat: 0, interface: .3 } })
+    expect(loadSoundPreferences()).toMatchObject({ enabled: false, intenseEffects: true, master: 1, volume: { music: .25, combat: 0, interface: .3 } })
   })
 })

@@ -3,6 +3,9 @@ import type { HeroForm } from '../data/heroForms'
 import type { Stage } from '../data/levels'
 import type { HeroProgress, InventoryState } from '../engine'
 
+export type CombatSpeed = 1 | 2
+export const combatStepMs = 100
+
 export type Stats = {
   damage?: number
   armor?: number
@@ -34,7 +37,7 @@ export type CombatEvent = {
   target: 'player' | 'enemy'
   source?: 'player' | 'enemy'
   techniqueId?: string
-  visual?: { theme: string; special?: boolean }
+  visual?: { theme: string; special?: boolean; bossPhase?: true }
   amount?: number
   critical?: boolean
 }
@@ -69,6 +72,7 @@ export type CombatUpdate = {
   player?: Combatant
   enemy?: Combatant
   recentEvents?: readonly CombatEvent[]
+  tick?: number
 } & ({ status: 'running' } | { status: 'finished'; report: CombatReport })
 
 export type CombatRequest = {
@@ -76,6 +80,7 @@ export type CombatRequest = {
   stage: Stage
   inventory: InventoryState
   hero?: HeroProgress
+  readSpeed?: () => CombatSpeed
 }
 
 export interface GameEngineAdapter {

@@ -15,7 +15,9 @@ function play(character: CharacterId, { form, health, armed = true }: { form?: H
   if (armed) inventory = placeItem(inventory, item(character === 'goku' ? 'power-pole' : 'kunai'), 'weapon', [1, 1])
   if (form) inventory = placeItem(inventory, item(form), 'form', [3, 2])
   const hero = createHeroProgress(character)
-  liveCombat.startCombat({ character, inventory, stage: stagesFor(character)[0], hero: { ...hero, health: health ?? hero.health } },
+  const stages = stagesFor(character)
+  const encounter = form === 'ultra-instinct' ? stages.find(({ enemy }) => enemy.id === 'goku-piccolo')! : stages[0]
+  liveCombat.startCombat({ character, inventory, stage: encounter, hero: { ...hero, health: health ?? hero.health } },
     (update) => updates.push(update), controller.signal)
   return { updates, close: () => controller.abort() }
 }

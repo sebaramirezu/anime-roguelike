@@ -1,16 +1,17 @@
-import { catalogFor, newDefensiveItems, type CharacterId, type Item } from './items.ts'
+import { catalogFor, type CharacterId, type Item } from './items.ts'
 import { awardHeroVictory, createHeroProgress, createInventory, rpgBalance, type HeroProgress } from '../engine'
 import type { CombatReport } from '../adapters/gameEngineAdapter'
 import { playerLoadout } from './combatLoadout'
 import type { Stage } from './levels'
 import { expandInventory, type ExpeditionInventory } from './expeditionInventory'
+import { legendaryUnlockAt, rollShopStock, shopItemEligible, shopOfferCount } from './shopStock'
 
 export const equipmentConfig = {
   starterCount: 2,
   supplyBudget: 5,
   provisionalGold: 30,
   refreshPrice: 4,
-  offerCount: 4,
+  offerCount: shopOfferCount,
 } as const
 
 export function supplyCost(item: Item): number | null {
@@ -37,33 +38,46 @@ export type EquipmentSession = {
   character: CharacterId
   gold: number
   round: number
+  shopSeed: number
   offers: Offer[]
   inventory: ExpeditionInventory
   hero: HeroProgress
   pendingVictory?: CombatReport
 }
 
-export function offersFor(character: CharacterId, round: number, legacy = false): Offer[] {
-  const pool = catalogFor(character)
-    .filter((item) => item.level < 6 && (!legacy || !newDefensiveItems.has(item.id)))
-    .flatMap((item) => item.price === null ? [] : [{ item, price: item.price }])
-    .sort((a, b) => Number(b.item.id === 'completo-italiano') - Number(a.item.id === 'completo-italiano'))
+export function repairShopOffers(character: CharacterId, stageIndex: number, offers: Offer[], replacements: Offer[]): Offer[] {
+  const regular = [...replacements.map(({ item }) => item), ...catalogFor(character)]
+    .filter((item) => item.level < 5 && shopItemEligible(character, item, stageIndex))
+  const reserved = new Set(offers.map(({ item }) => item.id))
+  let legendarySlotUsed = false
+  return offers.map((offer) => {
+    if (shopItemEligible(character, offer.item, stageIndex) && (offer.item.level !== 5 || !legendarySlotUsed)) {
+      if (offer.item.level === 5) legendarySlotUsed = true
+      return offer
+    }
+    const item = regular.find((candidate) => !reserved.has(candidate.id))!
+    reserved.add(item.id)
+    return { ...offer, item, price: item.price! }
+  })
+}
 
-  return Array.from({ length: equipmentConfig.offerCount }, (_, slot) => ({
-    ...pool[(round * equipmentConfig.offerCount + slot) % pool.length],
+export function offersFor(character: CharacterId, round: number, stageIndex = 0, shopSeed = 0): Offer[] {
+  return rollShopStock(character, shopSeed, round, stageIndex).map((item, slot) => ({
+    item, price: item.price!,
     id: `offer-${round}-${slot}`,
     sold: false,
   }))
 }
 
-export function startEquipmentSession(character: CharacterId, selection: readonly Item[]): EquipmentSession | null {
+export function startEquipmentSession(character: CharacterId, selection: readonly Item[], shopSeed = crypto.getRandomValues(new Uint32Array(1))[0]): EquipmentSession | null {
   if (!validStarterSelection(character, selection)) return null
   return {
     character,
     gold: equipmentConfig.provisionalGold,
     round: 0,
+    shopSeed,
     hero: createHeroProgress(character),
-    offers: offersFor(character, 0),
+    offers: offersFor(character, 0, 0, shopSeed),
     inventory: { bag: createInventory(), tray: selection.map((item) => ({ id: `starter-${item.id}`, item, rotation: 0 })) },
   }
 }
@@ -90,7 +104,8 @@ export function updateEquippedInventory(session: EquipmentSession, inventory: Ex
 
 export function buyOffer(session: EquipmentSession, id: string): EquipmentSession {
   const offer = session.offers.find((entry) => entry.id === id)
-  if (session.inventory.bag.combatActive || !offer || offer.sold || offer.item.level === 6 || offer.item.price === null || session.gold < offer.price) return session
+  if (session.inventory.bag.combatActive || session.pendingVictory || !offer || offer.sold || session.gold < offer.price
+    || !shopItemEligible(session.character, offer.item, session.hero.lastVictory + 1)) return session
   return {
     ...session,
     gold: session.gold - offer.price,
@@ -101,17 +116,25 @@ export function buyOffer(session: EquipmentSession, id: string): EquipmentSessio
 
 export function refreshOffers(session: EquipmentSession): EquipmentSession {
   const { refreshPrice } = equipmentConfig
-  if (session.inventory.bag.combatActive || session.gold < refreshPrice) return session
+  if (session.inventory.bag.combatActive || session.pendingVictory || session.gold < refreshPrice) return session
   const round = session.round + 1
-  return { ...session, round, gold: session.gold - refreshPrice, offers: offersFor(session.character, round) }
+  return { ...session, round, gold: session.gold - refreshPrice,
+    offers: offersFor(session.character, round, session.hero.lastVictory + 1, session.shopSeed) }
 }
 
 export function advanceEquipment(session: EquipmentSession, goldEarned: number | undefined, nextLevel: boolean): EquipmentSession {
-  if (!nextLevel) return { ...session, gold: session.gold + (goldEarned ?? 0) }
-
+  const stageIndex = session.hero.lastVictory + 1
+  if (!nextLevel) {
+    const gold = session.gold + (goldEarned ?? 0)
+    if (legendaryUnlockAt(session.character, stageIndex)) {
+      const round = session.round + 1
+      return { ...session, gold, round, offers: offersFor(session.character, round, stageIndex, session.shopSeed) }
+    }
+    return { ...session, gold }
+  }
   const round = session.round + 1
   return {
-    ...session, gold: 0, round, offers: offersFor(session.character, round),
+    ...session, gold: 0, round, offers: offersFor(session.character, round, stageIndex, session.shopSeed),
     inventory: expandInventory(session.inventory, session.inventory.bag.completedLevels + 1),
   }
 }

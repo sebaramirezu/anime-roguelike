@@ -9,6 +9,7 @@
     "test": "vitest run --pool=threads --maxWorkers=1",
     "lint": "oxlint",
     "sprites:enemies": "node scripts/generate-enemy-sprites.mjs",
+    "sprites:items": "node scripts/generate-item-icons.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

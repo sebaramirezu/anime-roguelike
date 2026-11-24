@@ -1,4 +1,4 @@
-import type { Combatant, CombatReport, CombatUpdate, Stats } from '../adapters/gameEngineAdapter'
+import type { Combatant, CombatReport, CombatSpeed, CombatUpdate, Stats } from '../adapters/gameEngineAdapter'
 import { CombatArena } from '../components/combat/CombatArena'
 import { outcomeLabels } from '../components/combat/arenaVisuals'
 import { ItemIcon } from '../components/inventory/ItemIcon'
@@ -167,12 +167,15 @@ function FighterDetails({ name, state }: { name: string; state?: Combatant }) {
   </details>
 }
 
-export function CombatScreen({ stage, hero, update, demo, error, onBack, onReport }: {
+export function CombatScreen({ stage, hero, update, demo, error, onBack, onReport, intenseEffects, speed, onToggleSpeed }: {
   stage: Stage
   hero: { id: CharacterId; name: string }
   update: CombatUpdate | null
   demo: boolean
   error: string | null
+  intenseEffects?: boolean
+  speed?: CombatSpeed
+  onToggleSpeed?: () => void
   onBack: () => void
   onReport: () => void
 }) {
@@ -188,7 +191,8 @@ export function CombatScreen({ stage, hero, update, demo, error, onBack, onRepor
     {demo && <p className="stage-notice">DEMO visual. Conecta el motor para ver ataques automáticos, efectos y estadísticas.</p>}
     {error && <p className="stage-notice" role="alert">{error}</p>}
     {!demo && !error && !update && <p role="status">Esperando el estado del motor…</p>}
-    <CombatArena stage={stage} hero={hero.id} heroForm={update?.player?.visualForm} bossPhase={update?.enemy?.bossPhase} events={events} outcome={outcome}
+    <CombatArena stage={stage} hero={hero.id} heroForm={update?.player?.visualForm} bossPhase={update?.enemy?.bossPhase} events={events}
+      outcome={outcome} intenseEffects={intenseEffects} tick={update?.tick} speed={speed} onToggleSpeed={error ? undefined : onToggleSpeed}
       leftHud={<FighterHud name={hero.name} state={update?.player} side="player" />}
       rightHud={<FighterHud name={stage.enemy.name} state={update?.enemy} side="enemy" />} />
     <LevelUpNotice report={update?.status === 'finished' ? update.report : undefined} />

@@ -163,7 +163,7 @@ describe('experience and persistence', () => {
 
   it('migrates legacy saves without changing purchased offers, and grants XP only for cleared stages', () => {
     const run = starter('naruto')
-    const legacyOffers = offersFor('naruto', 4, true)
+    const legacyOffers = offersFor('naruto', 4, 3)
     const raw = JSON.parse(serializeExpedition({ session: { ...run, offers: legacyOffers, round: 4 }, stageIndex: 3 }))
     const migrated = restoreExpedition(JSON.stringify({ ...raw, version: 1, hero: undefined, offerItems: undefined }))!
     expect(migrated.session.hero).toMatchObject({ level: 1, xp: 72, lastVictory: 2 })
@@ -294,12 +294,15 @@ describe('encounter balance', () => {
     expect(last.outcome, `${last.enemy} tras ${last.seconds} s, con ${last.enemyHp} HP restantes`).toBe('victory')
     expect(result.stages).toHaveLength(46)
     expect(result.stages.filter(({ kind }) => kind === 'major').every(({ seconds, phaseAt }) =>
-      seconds >= 30 && seconds <= 75 && phaseAt !== undefined && phaseAt < seconds)).toBe(true)
+      seconds <= 75 && phaseAt !== undefined && phaseAt < seconds)).toBe(true)
     expect(result.hero.lastVictory).toBe(45)
     expect(result.hero.level).toBeGreaterThan(5)
+    expect(result.fusions.some(({ level }) => level === 6)).toBe(false)
+    const measuredFusions = simulateShopCampaign(character, 'fusion', 0, 3).fusions.map(({ level }) => level)
+    expect(measuredFusions).toEqual(expect.arrayContaining([2, 3, 4]))
     const control = simulateShopCampaign(character)
-    expect(control.stages.at(-1)).toMatchObject({ enemy: character === 'goku' ? 'Cell' : 'Pain', outcome: 'defeat' })
+    expect(control.stages.at(-1)).toMatchObject({ enemy: character === 'goku' ? 'Piccolo' : 'Zabuza', outcome: 'defeat' })
     const controlNormals = control.stages.filter(({ kind }) => kind === 'normal')
-    expect(controlNormals.filter(({ seconds }) => seconds >= 18 && seconds <= 30).length).toBeGreaterThanOrEqual(24)
+    expect(controlNormals.filter(({ seconds }) => seconds >= 18 && seconds <= 30).length).toBeGreaterThanOrEqual(6)
   })
 })

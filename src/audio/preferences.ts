@@ -2,6 +2,7 @@ export const soundChannels = ['music', 'combat', 'interface'] as const
 export type SoundChannel = typeof soundChannels[number]
 export type SoundPreferences = {
   enabled: boolean
+  intenseEffects: boolean
   master: number
   volume: Record<SoundChannel, number>
   muted: Record<SoundChannel, boolean>
@@ -9,7 +10,7 @@ export type SoundPreferences = {
 
 export const audioStorageKey = 'anime-roguelike:audio:v1'
 export const defaultSoundPreferences: SoundPreferences = {
-  enabled: true, master: 0.8,
+  enabled: true, intenseEffects: true, master: 0.8,
   volume: { music: 0.25, combat: 0.45, interface: 0.30 },
   muted: { music: false, combat: false, interface: false },
 }
@@ -23,6 +24,7 @@ export function loadSoundPreferences(): SoundPreferences {
     const data = JSON.parse(localStorage.getItem(audioStorageKey) ?? 'null') as Partial<SoundPreferences> | null
     const next = { ...defaults, volume: { ...defaults.volume }, muted: { ...defaults.muted } }
     if (typeof data?.enabled === 'boolean') next.enabled = data.enabled
+    if (typeof data?.intenseEffects === 'boolean') next.intenseEffects = data.intenseEffects
     next.master = bounded(data?.master, defaults.master)
     for (const channel of soundChannels) {
       next.volume[channel] = bounded(data?.volume?.[channel], defaults.volume[channel])

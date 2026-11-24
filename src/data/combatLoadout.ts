@@ -1,5 +1,6 @@
 import { heroBaseStats, xpForNextLevel, type CombatSupport, type CombatantDefinition, type GameEffect, type HeroProgress, type InventoryState } from '../engine'
-import { items, type CharacterId } from './items'
+import { items, type CharacterId, type Item } from './items'
+import { fusionRecipes } from './fusionRecipes'
 import { heroForms } from './heroForms'
 import { bossPhaseFor, bossPhaseSupport } from './bossPhases'
 import type { Stage } from './levels'
@@ -74,8 +75,7 @@ export function playerLoadout(character: CharacterId, hero: HeroProgress, invent
     }
   }
   const scaledDamage = (damage: number) => Math.round(damage * base.damageMultiplier * 10) / 10
-  for (const { instanceId, item } of equipment) {
-    if (item.category !== 'Arma') continue
+  function addWeapon(instanceId: string, item: Item) {
     weaponNames.set(instanceId, item.name)
     techniqueIds.set(instanceId, item.id)
     const profile = item.effects.find((effect) => effect.kind === 'weaponProfile')
@@ -85,6 +85,17 @@ export function playerLoadout(character: CharacterId, hero: HeroProgress, invent
       cooldownMs: (profile?.cooldownMs ?? 1000 + item.level * 200) * (1 - Math.min(40, cooldownReduction) / 100),
       ...(profile?.bonusHits && { bonusHits: profile.bonusHits.map((hit) => ({ ...hit, damage: scaledDamage(hit.damage) })) }),
     })
+  }
+  const inherited = new Set<string>()
+  for (const { instanceId, item } of equipment) {
+    if (item.category === 'Arma') addWeapon(instanceId, item)
+    if (!item.effects.some(({ kind }) => kind === 'inheritWeapons') || inherited.has(item.id)) continue
+    inherited.add(item.id)
+    const recipe = fusionRecipes.find(({ result }) => result === item.id)
+    for (const id of recipe?.ingredients ?? []) {
+      const ingredient = catalog.get(id)
+      if (ingredient?.category === 'Arma') addWeapon(`${instanceId}:${id}`, ingredient)
+    }
   }
   const maxHealth = base.maxHealth + bonuses.maxHealth
   const definition: CombatantDefinition = {

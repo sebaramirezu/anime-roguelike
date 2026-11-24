@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { liveCombat } from '../adapters/liveCombat'
 import type { CombatUpdate } from '../adapters/gameEngineAdapter'
 import { createInventory, setInventoryCombatLock } from '../engine'
-import { advanceEquipment, buyOffer, startEquipmentSession, type EquipmentSession } from './equipmentSession'
+import { advanceEquipment, buyOffer, offersFor, startEquipmentSession, type EquipmentSession } from './equipmentSession'
 import { editInventory, inventoryView, previewPlacement, type ExpeditionInventory, type InventoryCommand } from './expeditionInventory'
 import { expeditionSaveKey, loadExpedition, restoreExpedition, saveExpedition, serializeExpedition } from './expeditionSave'
 import { items, type Cell } from './items'
@@ -29,7 +29,10 @@ function place(inventory: ExpeditionInventory, instanceId: string, anchor: Cell)
 }
 
 function session(): EquipmentSession {
-  const started = startEquipmentSession('naruto', [getItem('kunai'), getItem('basic-shield')])
+  const seed = Array.from({ length: 32 }, (_, value) => value).find((value) =>
+    offersFor('naruto', 0, 0, value).some(({ item }) => item.id === 'kunai'))
+  if (seed === undefined) throw new Error('Expected a seed with Kunai in the initial stock.')
+  const started = startEquipmentSession('naruto', [getItem('kunai'), getItem('basic-shield')], seed)
   if (!started) throw new Error('Expected a valid starter selection.')
   return started
 }

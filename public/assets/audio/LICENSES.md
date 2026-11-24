@@ -22,4 +22,6 @@ Según el permiso incluido en el paquete, las siete pistas se pueden usar, edita
 
 Las pistas se guardan en `music/`. Si se sustituye una pista, mantener el nombre base de la primera columna y usar una extensión `.ogg`, `.mp3` o `.wav`.
 
+La fase fuerte usa un efecto propio de Web Audio por activación. El mezclador le da prioridad sobre los golpes de ese instante y baja brevemente el volumen del tema de jefe, que continúa en el mismo punto. La pista opcional `music/jefe-fase-fuerte.ogg` (también admite `.mp3` o `.wav`) está preparada para una transición con fundido al instalarla. El paquete de siete temas no incluye esa pista.
+
 Reiniciar Vite o recompilar después de añadir archivos. El build registra solo las pistas existentes. Si faltan los temas de victoria y derrota, se usan fanfarrias sintéticas cortas. El resto de las pistas ausentes permanece en silencio.

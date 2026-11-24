@@ -1,20 +1,20 @@
 import { awardHeroVictory, createHeroProgress, createInventory, placeItem, rpgBalance, xpForNextLevel, type HeroProgress, type Rotation } from '../engine'
 import type { CombatReport } from '../adapters/gameEngineAdapter'
 import { playerLoadout } from './combatLoadout'
-import { offersFor, type EquipmentSession } from './equipmentSession'
+import { offersFor, repairShopOffers, type EquipmentSession } from './equipmentSession'
 import type { UnplacedEntry } from './expeditionInventory'
 import { catalogFor, type Cell } from './items'
 import { stagesFor } from './levels'
 
 export const expeditionSaveKey = 'anime-roguelike:expedition'
-const version = 2
+const version = 3
 
 type SavedExpedition = { session: EquipmentSession; stageIndex: number }
 
 export function serializeExpedition({ session, stageIndex }: SavedExpedition): string {
-  const { character, gold, round, offers, inventory } = session
+  const { character, gold, round, shopSeed, offers, inventory } = session
   return JSON.stringify({
-    version, character, gold, round, stageIndex, hero: session.hero, pendingVictory: session.pendingVictory,
+    version, character, gold, round, shopSeed, stageIndex, hero: session.hero, pendingVictory: session.pendingVictory,
     offerItems: offers.map(({ item }) => item.id),
     sold: offers.filter((offer) => offer.sold).map(({ id }) => id),
     tray: inventory.tray.map(({ id, item, rotation }) => ({ id, itemId: item.id, rotation })),
@@ -85,7 +85,7 @@ export function restoreExpedition(raw: string | null): SavedExpedition | null {
   if (!raw) return null
   try {
     const saved: unknown = JSON.parse(raw)
-    if (!isRecord(saved) || (saved.version !== version && saved.version !== 1)) return null
+    if (!isRecord(saved) || (saved.version !== version && saved.version !== 2 && saved.version !== 1)) return null
     const { character, gold, round, stageIndex, sold, tray, placed } = saved
     if ((character !== 'goku' && character !== 'naruto') || !isNatural(gold) || !isNatural(round)
       || !isNatural(stageIndex) || !Array.isArray(sold)
@@ -95,16 +95,19 @@ export function restoreExpedition(raw: string | null): SavedExpedition | null {
     const stage = stages[stageIndex]
     if (!stage) return null
     const legacy = saved.version === 1
+    const shopSeed = saved.version === version ? saved.shopSeed : 0
+    if (!isNatural(shopSeed) || shopSeed > 0xffffffff) return null
     const catalog = new Map(catalogFor(character).map((item) => [item.id, item]))
-    let offers = offersFor(character, round, legacy)
+    let offers = offersFor(character, round, stageIndex, shopSeed)
     if (!legacy) {
       const offerItems = saved.offerItems
       if (!Array.isArray(offerItems) || offerItems.length !== offers.length || new Set(offerItems).size !== offerItems.length) return null
-      offers = offers.map((offer, index) => {
+      const original = offers.map((offer, index) => {
         const item = catalog.get(offerItems[index])
         if (!item || item.level === 6 || item.price === null) throw new Error('Invalid shop item')
         return { ...offer, item, price: item.price }
       })
+      offers = repairShopOffers(character, stageIndex, original, offers)
     }
     if (new Set(sold).size !== sold.length || !sold.every((id) => offers.some((offer) => offer.id === id))) return null
     const seen = new Set<string>()
@@ -141,7 +144,7 @@ export function restoreExpedition(raw: string | null): SavedExpedition | null {
     return {
       stageIndex,
       session: {
-        character, gold, round, offers: offers.map((offer) => ({ ...offer, sold: sold.includes(offer.id) })),
+        character, gold, round, shopSeed, offers: offers.map((offer) => ({ ...offer, sold: sold.includes(offer.id) })),
         inventory: { bag, tray: unplaced },
         hero,
         ...(pendingVictory ? { pendingVictory } : {}),

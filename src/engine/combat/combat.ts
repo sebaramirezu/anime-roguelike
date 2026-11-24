@@ -89,11 +89,14 @@ export function createCombat(options: CreateCombatOptions): CombatState {
   }
 }
 
+type AttackListener = (attack: ResolvedAttack, elapsedMs: number) => void
+
 function attackReadyWeapons(
   attacker: CombatantState,
   target: CombatantState,
   source: ResolvedAttack['source'],
-  onAttack?: (attack: ResolvedAttack) => void,
+  elapsedMs: number,
+  onAttack?: AttackListener,
 ): { attacker: CombatantState; target: CombatantState } {
   let updatedTarget = target
   const receivedMultiplier = receivedDamageMultiplier(target.activeEffects)
@@ -115,7 +118,7 @@ function attackReadyWeapons(
         ...(absorbed > 0 ? { absorbed } : {}),
         ...(bonusHit ? { bonusHit } : {}),
         lethal: previousHealth > 0 && updatedTarget.health === 0,
-      })
+      }, elapsedMs)
     }
     hit(weapon.damage)
     for (const bonus of weapon.bonusHits ?? []) {
@@ -164,7 +167,7 @@ function triggerReadySupports(state: CombatantState, target: ResolvedSupport['ta
  * Advance a combat by a deterministic duration. The returned state is a new value;
  * the input state is never mutated. At equal timestamps, the player attacks first.
  */
-export function advanceCombat(state: CombatState, deltaMs: number, onAttack?: (attack: ResolvedAttack) => void,
+export function advanceCombat(state: CombatState, deltaMs: number, onAttack?: AttackListener,
   onSupport?: (support: ResolvedSupport) => void): CombatState {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) {
     throw new Error('deltaMs must be a non-negative finite number.')
@@ -183,7 +186,7 @@ export function advanceCombat(state: CombatState, deltaMs: number, onAttack?: (a
       || current.enemy.weapons.some((weapon) => weapon.remainingCooldownMs <= 1e-9)
 
     if (ready) {
-      const playerAttack = attackReadyWeapons(current.player, current.enemy, 'player', onAttack)
+      const playerAttack = attackReadyWeapons(current.player, current.enemy, 'player', current.elapsedMs, onAttack)
       if (playerAttack.target.health <= 0) {
         current = resolveStatus({
           ...current,
@@ -192,7 +195,7 @@ export function advanceCombat(state: CombatState, deltaMs: number, onAttack?: (a
         })
         break
       }
-      const enemyAttack = attackReadyWeapons(playerAttack.target, playerAttack.attacker, 'enemy', onAttack)
+      const enemyAttack = attackReadyWeapons(playerAttack.target, playerAttack.attacker, 'enemy', current.elapsedMs, onAttack)
       current = resolveStatus({
         ...current,
         player: enemyAttack.target,

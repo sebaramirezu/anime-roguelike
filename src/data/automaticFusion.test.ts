@@ -6,6 +6,7 @@ import { editInventory, inventoryView, previewPlacement, previewRotation, type E
 import { restoreExpedition, serializeExpedition } from './expeditionSave'
 import { fusionRecipes } from './fusionRecipes'
 import { items, type Cell } from './items'
+import { stagesFor } from './levels'
 
 const lookup = (id: string) => items.find((item) => item.id === id)!
 const [naruto, variant, resultId] = ['rasenshuriken', 'kurama-rasenshuriken', 'baryon-mode']
@@ -216,17 +217,20 @@ describe('automatic fusion', () => {
       return recipe ? recipe.ingredients.flatMap((ingredient) => basicIngredients(ingredient, [...path, id])) : [id]
     }
     for (const character of ['goku', 'naruto'] as const) {
-      const offers = Array.from({ length: items.length }, (_, round) => offersFor(character, round)).flat()
+      const stageIndex = stagesFor(character).findIndex(({ level, number }) => level === 4 && number === 6)
+      const offers = Array.from({ length: 512 }, (_, round) =>
+        offersFor(character, round, stageIndex).map((offer) => ({ offer, round }))).flat()
       const starter = startEquipmentSession(character, [lookup(character === 'goku' ? 'power-pole' : 'kunai'), lookup('basic-shield')])!
       for (const { result } of fusionRecipes.filter((recipe) => ['shared', character].includes(lookup(recipe.result).owner))) {
         const acquired = new Set<string>()
         for (const ingredient of basicIngredients(result)) {
-          const offer = offers.find(({ id, item }) => item.id === ingredient && !acquired.has(id))!
-          expect(buyOffer({ ...starter, offers: [offer] }, offer.id).inventory.tray.at(-1)?.item.id).toBe(ingredient)
+          const { offer, round } = offers.find(({ offer }) => offer.item.id === ingredient && !acquired.has(offer.id))!
+          const stocked = { ...starter, round, offers: [offer], hero: { ...starter.hero, lastVictory: stageIndex - 1 } }
+          expect(buyOffer(stocked, offer.id).inventory.tray.at(-1)?.item.id).toBe(ingredient)
           acquired.add(offer.id)
         }
       }
-      expect(offers.every(({ item }) => item.level < 6 && !recipesByResult.has(item.id))).toBe(true)
+      expect(offers.every(({ offer: { item } }) => item.level < 6 && !recipesByResult.has(item.id))).toBe(true)
     }
   })
 
@@ -239,8 +243,12 @@ describe('automatic fusion', () => {
       return [updated, instanceId] as const
     }
 
-    const starter = startEquipmentSession(character, [lookup('basic-shield'), lookup('healing-potion')])!
     const weapon = character === 'goku' ? 'power-pole' : 'kunai'
+    const seed = Array.from({ length: 512 }, (_, value) => value).find((value) =>
+      [weapon, 'basic-shield', 'healing-potion'].every((id, round) =>
+        offersFor(character, round, 0, value).some(({ item }) => item.id === id)))!
+    expect(seed).toBeDefined()
+    const starter = startEquipmentSession(character, [lookup('basic-shield'), lookup('healing-potion')], seed)!
     const [armed, weaponId] = buyItem(starter, weapon)
     const [withShield, shieldId] = buyItem(refreshOffers(armed), 'basic-shield')
     const [withPotion, potionId] = buyItem(refreshOffers(withShield), 'healing-potion')

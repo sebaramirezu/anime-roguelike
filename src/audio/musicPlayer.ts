@@ -72,6 +72,15 @@ export class MusicPlayer {
     this.active = undefined
   }
 
+  emphasizePhase() {
+    if (!this.active) return
+    const level = this.active.gain.gain
+    const time = this.context.currentTime
+    level.cancelAndHoldAtTime(time)
+    level.linearRampToValueAtTime(.56, time + .12)
+    level.linearRampToValueAtTime(1, time + .85)
+  }
+
   private fade(track: Track, target: number, time: number) {
     const level = track.gain.gain
     level.cancelAndHoldAtTime(time)

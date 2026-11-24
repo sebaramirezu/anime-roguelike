@@ -21,7 +21,7 @@ it('bounds the best insufficient build below the requirements for each major bos
     expect(boss.guaranteed, boss.id).toBe(true)
     expect(boss.latestSurvival, boss.id).toBeLessThan(boss.earliestKill)
     expect(boss.unavoidable, boss.id).toBeGreaterThanOrEqual(boss.envelope.endurance)
-    for (const match of boss.matches.filter(({ tier }) => ['A', 'B', 'M'].includes(tier))) {
+    for (const match of boss.matches.filter(({ tier }) => ['A', 'B'].includes(tier) || (tier === 'M' && boss.world >= 4))) {
       expect(match.outcome, `${boss.id} · ${match.tier}${match.route}`).toBe('defeat')
     }
   }

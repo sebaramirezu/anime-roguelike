@@ -11,6 +11,7 @@ export type ItemEffect =
   | { kind: 'statBonus'; stat: 'escudo' | 'vida máxima' | 'defensa'; amount: number }
   | { kind: 'technique'; description: string }
   | { kind: 'weaponProfile'; damage: number; cooldownMs: number; bonusHits?: readonly BonusHit[] }
+  | { kind: 'inheritWeapons' }
   | { kind: 'damageBoost'; percent: number; seconds: number; belowHealthPercent?: number }
   | { kind: 'damageReduction'; percent: number; seconds: number; belowHealthPercent: number }
 
@@ -86,6 +87,7 @@ const baseItems: readonly Item[] = [
   technique('goku', 'focused-spirit-bomb', 'Genkidama concentrada', 5, shapes.arc, '◉', 'Variante de fusión que concentra la energía de una Genkidama.', 'Carga de Ki concentrada.',
     { damage: 110, cooldownMs: 3075 }),
   fusionItem('goku', 'ultra-instinct', 'Migatte no Gokui', 6, 'Potenciación', shapes.cross, '✧', 'El cuerpo responde por instinto.', [
+    { kind: 'inheritWeapons' },
     { kind: 'damageBoost', percent: 55, seconds: 11, belowHealthPercent: 48 },
     { kind: 'damageReduction', percent: 35, seconds: 11, belowHealthPercent: 48 },
   ]),
@@ -121,8 +123,6 @@ const baseItems: readonly Item[] = [
   item('naruto', 'chunin-vest', 'Chaleco Chunin', 3, 'Armadura', shapes.square, '▣', 'Chaleco reforzado que reduce el daño recibido.', [{ kind: 'statBonus', stat: 'defensa', amount: 26 }]),
   item('naruto', 'chakra-barrier', 'Barrera de Chakra', 3, 'Escudo', shapes.bend, '⬟', 'Reserva de chakra para el inicio del combate.', [{ kind: 'statBonus', stat: 'escudo', amount: 280 }]),
 ]
-
-export const newDefensiveItems = new Set(baseItems.slice(-6).map(({ id }) => id))
 
 export const items: readonly Item[] = [
   ...baseItems,
@@ -200,6 +200,7 @@ export function describeItemEffect(effect: ItemEffect): string {
         ? '' : ` al bajar del ${effect.belowHealthPercent}% de vida, una vez por combate`}` : ''}.`
     case 'statBonus': return `+${effect.amount} de ${effect.stat === 'defensa' ? 'armadura' : effect.stat === 'escudo' ? 'escudo máximo' : effect.stat}.`
     case 'technique': return effect.description
+    case 'inheritWeapons': return 'Conserva la Genkidama y la Genkidama concentrada, cada una con su propia recarga.'
     case 'weaponProfile': {
       const hitLabels = { physical: 'golpe físico', energy: 'descarga de energía', clone: 'ataque de clon' }
       const extras = effect.bonusHits?.map(({ kind, damage }) => `${hitLabels[kind]} de ${damage}`).join(', ')

@@ -27,7 +27,7 @@ export function soundForEvent(event: CombatEvent): SoundCue | undefined {
         : event.critical ? 'criticalHit' : 'hit'
     case 'shield': return event.target === 'player' ? 'protect' : 'shieldHit'
     case 'heal': return 'heal'
-    case 'transform': return technique ?? 'transform'
+    case 'transform': return event.visual?.bossPhase ? 'bossPhase' : technique ?? 'transform'
     case 'death': return event.target === 'player' ? 'playerDown' : 'enemyDown'
     case 'effect': return technique
   }

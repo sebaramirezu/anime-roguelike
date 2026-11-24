@@ -12,7 +12,7 @@ import { CombatScreen, ResultScreen, StageMap, StageNotice } from './screens/Exp
 import { advanceEquipment, buyOffer, recordVictory, recoverAfterVictory, refreshOffers, startEquipmentSession, updateEquippedInventory, type EquipmentSession } from './data/equipmentSession'
 import { playerLoadout } from './data/combatLoadout'
 import { stagesFor, type Stage } from './data/levels'
-import type { CombatReport, CombatUpdate, GameEngineAdapter } from './adapters/gameEngineAdapter'
+import type { CombatReport, CombatSpeed, CombatUpdate, GameEngineAdapter } from './adapters/gameEngineAdapter'
 import { liveCombat } from './adapters/liveCombat'
 import { editInventory, type InventoryCommand, type InventoryResponse } from './data/expeditionInventory'
 import { loadExpedition, saveExpedition } from './data/expeditionSave'
@@ -39,10 +39,12 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
   const [storageError, setStorageError] = useState(false)
   const [combat, setCombat] = useState<CombatUpdate | null>(null)
   const [combatError, setCombatError] = useState<string | null>(null)
+  const [combatSpeed, setCombatSpeed] = useState<CombatSpeed>(1)
   const [soundSettings, setSoundSettings] = useState(loadSoundPreferences)
   const [audio] = useState(() => new GameAudio(soundSettings))
   const levelUpSound = useRef(false)
   const activeCombat = useRef<AbortController | null>(null)
+  const playbackSpeed = useRef<CombatSpeed>(1)
   const character = characters.find(({ id }) => id === selectedCharacter) ?? characters[0]
   const activeCharacter = characters.find(({ id }) => id === session?.character) ?? character
   const stages = stagesFor(activeCharacter.id)
@@ -88,6 +90,8 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
   function confirmEquipment(selection: readonly Item[]) {
     const next = startEquipmentSession(selectedCharacter, selection)
     if (!next) return
+    playbackSpeed.current = 1
+    setCombatSpeed(1)
     setSession(next)
     setStageIndex(0)
     setScreen('preparation')
@@ -113,9 +117,10 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
       setCombatError('El motor no pudo iniciar o completar el combate. Vuelve a preparación para reintentar.')
     }
     try {
-      const task = engine.startCombat({ character: session.character, stage, inventory: lockedInventory, hero: session.hero }, (update) => {
+      const task = engine.startCombat({ character: session.character, stage, inventory: lockedInventory, hero: session.hero,
+        readSpeed: () => playbackSpeed.current }, (update) => {
         if (controller.signal.aborted) return
-        audio.combatUpdate(update)
+        audio.combatUpdate(update, playbackSpeed.current)
         setCombat(update)
         if (update.status === 'finished') {
           controller.abort()
@@ -208,7 +213,11 @@ function App({ engine = liveCombat }: { engine?: GameEngineAdapter }) {
       onStart={beginCombat} onBack={() => setScreen('preparation')} />}
     {screen === 'combat' && <CombatScreen stage={stage}
       hero={{ id: activeCharacter.id, name: activeCharacter.name }}
-      update={settledCombat} demo={false} error={combatError}
+      update={settledCombat} demo={false} error={combatError} intenseEffects={soundSettings.intenseEffects}
+      speed={combatSpeed} onToggleSpeed={() => {
+        playbackSpeed.current = playbackSpeed.current === 1 ? 2 : 1
+        setCombatSpeed(playbackSpeed.current)
+      }}
       onBack={() => setScreen('preparation')} onReport={() => setScreen('result')} />}
     {screen === 'result' && <ResultScreen stage={stage} report={report} onContinue={() => continueExpedition(report)} onMap={() => setScreen('map')} />}
     {screen === 'arsenal' && <ArsenalScreen character={arsenalCharacter} onSelect={setArsenalCharacter} onBack={() => setScreen('menu')} />}

@@ -39,6 +39,7 @@ export const soundBank = {
   protect: [tone(590, 1140, .17, .26, 0, 'sine'), noise(2600, 720, .16, .21)],
   heal: notes([440, 554, 659, 880], .18, .07),
   transform: [tone(200, 840, .27, .28, 0, 'sine'), noise(970, 2100, .24, .22, .10)],
+  bossPhase: [tone(92, 61, .44, .27, 0, 'sine'), tone(135, 410, .27, .18), noise(820, 220, .29, .13, .12)],
   danger: [tone(262, 262, .105, .21, 0, 'sine'), tone(221, 221, .145, .22, .15, 'sine')],
   enemyDown: [tone(275, 78, .27, .32), noise(950, 175, .23, .22, .03)],
   playerDown: [tone(165, 49, .32, .35, 0, 'sine'), noise(540, 145, .25, .22, .06)],
@@ -53,7 +54,7 @@ export const soundBank = {
 export type SoundCue = keyof typeof soundBank
 
 const priorities: Partial<Record<SoundCue, number>> = {
-  victory: 6, defeat: 6, playerDown: 5, enemyDown: 4, danger: 4, levelUp: 5, fusion: 5,
+  victory: 6, defeat: 6, bossPhase: 6, playerDown: 5, enemyDown: 4, danger: 4, levelUp: 5, fusion: 5,
   beam: 4, genkidama: 4, instinct: 4, kyubi: 4, baryon: 4, rasengan: 4, rasenshuriken: 4,
   kaioken: 4, transform: 4, special: 4, criticalHit: 4, criticalTaken: 4,
   hurt: 3, hit: 3, protect: 3, shieldHit: 3, heal: 3,
